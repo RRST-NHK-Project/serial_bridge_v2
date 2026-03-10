@@ -138,9 +138,9 @@ void setup() {
     xTaskCreate(
         Output_Task,  // タスク関数
         "INPUT_Task", // タスク名
-        2048,         // スタックサイズ（words）
+        1024,         // スタックサイズ（words）
         NULL,
-        8, // 優先度
+        4, // 優先度
         NULL);
 
 #elif defined(MODE_DEBUG)
