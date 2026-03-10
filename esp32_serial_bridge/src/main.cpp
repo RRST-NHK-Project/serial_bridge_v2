@@ -101,7 +101,7 @@ void setup() {
         11, // 優先度
         NULL);
 
-#elif defined(MODE_ROBOMAS_AD)
+#elif defined(MODE_ROBOMAS_PLUS_OUTPUT)
     // ロボマスモード初期化
 
     robomas_init();
@@ -114,19 +114,31 @@ void setup() {
         9, // 優先度
         NULL);
 
-    // xTaskCreate(
-    //     PID_Task,   // タスク関数
-    //     "PID_Task", // タスク名
-    //     2048,       // スタックサイズ（words）
-    //     NULL,
-    //     11, // 優先度
-    //     NULL);
-
     // 出力モード初期化
     xTaskCreate(
         Output_Task,   // タスク関数
         "Output_Task", // タスク名
         2048,          // スタックサイズ（words）
+        NULL,
+        8, // 優先度
+        NULL);
+
+#elif defined(MODE_ROBOMAS_PLUS_INPUT)
+
+    robomas_init();
+
+    xTaskCreate(
+        M3508_Task,   // タスク関数
+        "M3508_Task", // タスク名
+        2048,         // スタックサイズ（words）
+        NULL,
+        9, // 優先度
+        NULL);
+
+    xTaskCreate(
+        Output_Task,  // タスク関数
+        "INPUT_Task", // タスク名
+        2048,         // スタックサイズ（words）
         NULL,
         8, // 優先度
         NULL);
@@ -163,7 +175,7 @@ void setup() {
 #endif
 
 #if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
-     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_AD) + defined(MODE_DEBUG)) != 1
+     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_DEBUG)) != 1
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }
