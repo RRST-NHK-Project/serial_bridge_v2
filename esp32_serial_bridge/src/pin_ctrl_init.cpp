@@ -21,7 +21,8 @@ void IO_init();
 
 void Input_init() {
     // エンコーダとスイッチの初期化
-    ENCx2_SWx8_init();
+    // ENCx2_SWx8_init();
+    ENCx4_SWx4_init();
 }
 
 void Output_init() {

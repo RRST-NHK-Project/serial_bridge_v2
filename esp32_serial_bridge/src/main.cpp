@@ -31,7 +31,7 @@ void setup() {
     pinMode(LED, OUTPUT);
 
     // ready
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < DEVICE_ID; i++) {
         digitalWrite(LED, HIGH);
         delay(50);
         digitalWrite(LED, LOW);
