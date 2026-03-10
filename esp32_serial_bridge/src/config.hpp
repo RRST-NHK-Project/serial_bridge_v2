@@ -31,7 +31,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 
 // サーボ関連の設定、使用するサーボに応じて変更
 #define SERVO_PWM_FREQ 50       // サーボPWM周波数（Hz）
-#define SERVO_PWM_RESOLUTION 16 // サーボPWM分解能（bit）
+#define SERVO_PWM_RESOLUTION 14 // サーボPWM分解能（bit）14ビット推奨
 
 // サーボの最小・最大パルス幅、角度範囲、初期角度の設定
 #define SERVO1_MIN_US 500
