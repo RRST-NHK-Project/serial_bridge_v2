@@ -136,8 +136,8 @@ void setup() {
         NULL);
 
     xTaskCreate(
-        INPUT_Task,   // タスク関数
-        "INPUT_Task", // タスク名
+        Input_Task,   // タスク関数
+        "Input_Task", // タスク名
         1024,         // スタックサイズ（words）
         NULL,
         4, // 優先度
