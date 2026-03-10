@@ -76,7 +76,7 @@ uint8_t rx_index = 0;
 uint8_t rx_checksum = 0;
 
 // 入力モードでは送信周期を短くする
-#if defined(MODE_INPUT || MODE_ROBOMAS_PLUS_INPUT)
+#if defined(MODE_INPUT) || defined(MODE_ROBOMAS_PLUS_INPUT)
 constexpr uint32_t TX_PERIOD_MS = 20; // 送信周期（ミリ秒）
 #else
 constexpr uint32_t TX_PERIOD_MS = 100; // 送信周期（ミリ秒）
