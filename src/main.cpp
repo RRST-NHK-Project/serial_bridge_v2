@@ -38,7 +38,9 @@ int main(int argc, char *argv[]) {
             {
                 std::lock_guard<std::mutex> lock(map_mutex);
                 for (auto &[id, port] : devices) {
-                    if (node_map.count(id) == 0) {
+                    auto it = node_map.find(id);
+                    if (it == node_map.end()) {
+                        // 未知のデバイス: 新規ノードを作成
                         RCLCPP_INFO(debug_node->get_logger(),
                                     "New device found: ID=0x%02X port=%s",
                                     id, port.c_str());
@@ -46,7 +48,22 @@ int main(int argc, char *argv[]) {
                         node_map[id] = node;
                         known_ports.insert(port);
                         executor.add_node(node);
+                    } else if (!it->second->is_connected()) {
+                        // 既知のデバイスが切断中に別ポートで再検出された: ノードを作り直す
+                        // 注: is_connected() は atomic だが map_mutex とは同期しない。
+                        // タイミングによって接続直後のノードを置き換える可能性がある（極めて稀）が、
+                        // 新ノードが即座に再接続するため実害はない。
+                        RCLCPP_INFO(debug_node->get_logger(),
+                                    "Device ID=0x%02X reconnected on new port %s (was %s) — replacing node",
+                                    id, port.c_str(), it->second->get_port().c_str());
+                        executor.remove_node(it->second);
+                        known_ports.erase(it->second->get_port());
+                        auto node = std::make_shared<SerialBridgeNode>(id, port);
+                        it->second = node;
+                        known_ports.insert(port);
+                        executor.add_node(node);
                     }
+                    // 接続中かつ既知: 何もしない
                 }
             }
 

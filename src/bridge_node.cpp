@@ -62,6 +62,7 @@ void SerialBridgeNode::close_port() {
         close(fd_);
         fd_ = -1;
     }
+    connected_ = false;
     rx_buffer_.clear();
 }
 
@@ -88,6 +89,7 @@ bool SerialBridgeNode::try_open_port() {
     tcsetattr(fd_, TCSANOW, &tty);
 
     RCLCPP_INFO(this->get_logger(), "Connected to %s", port_.c_str());
+    connected_ = true;
     return true;
 }
 
@@ -116,6 +118,8 @@ void SerialBridgeNode::update() {
                         port_.c_str());
             close_port();
             last_reconnect_attempt_ = std::chrono::steady_clock::now();
+        } else {
+            RCLCPP_DEBUG(this->get_logger(), "read error on %s: %s", port_.c_str(), strerror(errno));
         }
         return;
     }
@@ -237,6 +241,8 @@ void SerialBridgeNode::tx_callback(
                         port_.c_str());
             close_port();
             last_reconnect_attempt_ = std::chrono::steady_clock::now();
+        } else {
+            RCLCPP_DEBUG(this->get_logger(), "write error on %s: %s", port_.c_str(), strerror(errno));
         }
     }
 }
