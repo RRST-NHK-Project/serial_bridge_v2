@@ -18,7 +18,7 @@ constexpr size_t RX16NUM = 17;
 constexpr auto RECONNECT_INTERVAL = std::chrono::seconds(3);
 
 // RX タイムアウト: この時間内にデータを受信しなければポートを破棄する
-constexpr auto RX_TIMEOUT = std::chrono::seconds(5);
+constexpr auto RX_TIMEOUT = std::chrono::seconds(2);
 
 // EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
 static bool is_disconnect_error(int err) {
