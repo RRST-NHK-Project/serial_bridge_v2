@@ -17,6 +17,11 @@ constexpr size_t RX16NUM = 17;
 // 再接続を試みるインターバル
 constexpr auto RECONNECT_INTERVAL = std::chrono::seconds(3);
 
+// EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
+static bool is_disconnect_error(int err) {
+    return err == EIO || err == ENODEV || err == ENXIO;
+}
+
 // コメントそのうち整備します
 
 /*
@@ -88,6 +93,15 @@ bool SerialBridgeNode::try_open_port() {
     tty.c_cc[VTIME] = 0;
     tcsetattr(fd_, TCSANOW, &tty);
 
+    // カーネルの送受信バッファに残った古いデータを破棄する。
+    // スキャナが同じポートを一時的に開いて読み込んだ後に残ったバイト列や、
+    // 切断前の途中フレームがバッファに残っていると START_BYTE 同期が取れなくなる。
+    if (tcflush(fd_, TCIOFLUSH) < 0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "tcflush failed on %s: %s — stale bytes may remain",
+                    port_.c_str(), strerror(errno));
+    }
+
     RCLCPP_INFO(this->get_logger(), "Connected to %s", port_.c_str());
     connected_ = true;
     return true;
@@ -112,7 +126,7 @@ void SerialBridgeNode::update() {
     uint8_t buf[128];
     int n = read(fd_, buf, sizeof(buf));
     if (n < 0) {
-        if (errno == EIO || errno == ENODEV || errno == ENXIO) {
+        if (is_disconnect_error(errno)) {
             RCLCPP_WARN(this->get_logger(),
                         "Device disconnected from %s — waiting for reconnection",
                         port_.c_str());
@@ -235,7 +249,7 @@ void SerialBridgeNode::tx_callback(
     frame[3 + LEN] = checksum;
 
     if (write(fd_, frame, sizeof(frame)) < 0) {
-        if (errno == EIO || errno == ENODEV || errno == ENXIO) {
+        if (is_disconnect_error(errno)) {
             RCLCPP_WARN(this->get_logger(),
                         "Device disconnected from %s (write error) — waiting for reconnection",
                         port_.c_str());
