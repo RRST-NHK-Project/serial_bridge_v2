@@ -26,6 +26,7 @@ private:
     uint8_t device_id_;
     std::string port_;
     std::chrono::steady_clock::time_point last_reconnect_attempt_;
+    std::chrono::steady_clock::time_point last_rx_time_;
 
     rclcpp::TimerBase::SharedPtr timer_;
     std::deque<uint8_t> rx_buffer_;
