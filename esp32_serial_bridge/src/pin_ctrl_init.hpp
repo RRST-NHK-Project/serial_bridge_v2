@@ -15,4 +15,6 @@ void Input_init();
 void ENCx4_SWx4_init();
 void ENCx2_SWx8_init();
 void ENCx2_init();
+void ROBOMAS_IO_init();
+void ENCx4_init();
 void IO_init();

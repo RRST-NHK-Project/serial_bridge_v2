@@ -65,6 +65,17 @@ void IO_Task(void *) {
     }
 }
 
+void ROBOMAS_IO_Task(void *) {
+    TickType_t last_wake = xTaskGetTickCount();
+    ROBOMAS_IO_init();
+
+    while (1) {
+        IO_TR_Output();
+        IO_ENC_Input();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CTRL_PERIOD_MS));
+    }
+}
+
 void ENC_Input() {
     // ENC入力処理
     // taskENTER_CRITICAL();
@@ -180,26 +191,15 @@ void IO_TR_Output() {
 }
 
 void IO_ENC_Input() {
+    pcnt_get_counter_value(PCNT_UNIT_0, (int16_t *)&Tx_16Data[1]);
+    pcnt_get_counter_value(PCNT_UNIT_1, (int16_t *)&Tx_16Data[2]);
+}
 
-    int16_t cnt0, cnt1;
-    static int32_t total_cnt0 = 0;
-    static int32_t total_cnt1 = 0;
-
-    pcnt_get_counter_value(PCNT_UNIT_0, &cnt0);
-    pcnt_get_counter_value(PCNT_UNIT_1, &cnt1);
-
-    pcnt_counter_clear(PCNT_UNIT_0);
-    pcnt_counter_clear(PCNT_UNIT_1);
-
-    total_cnt0 += cnt0;
-    total_cnt1 += cnt1;
-
-    float angle0 = total_cnt0 * DEG_PER_COUNT;
-    float angle1 = total_cnt1 * DEG_PER_COUNT;
-
-    // オーバーフロー対策が甘いがとりあえずそのまま送る
-    Tx_16Data[1] = static_cast<int16_t>(angle0);
-    Tx_16Data[2] = static_cast<int16_t>(angle1);
+void ROBOMAS_IO_ENC_Input() {
+    pcnt_get_counter_value(PCNT_UNIT_0, (int16_t *)&Tx_16Data[1]);
+    pcnt_get_counter_value(PCNT_UNIT_1, (int16_t *)&Tx_16Data[2]);
+    pcnt_get_counter_value(PCNT_UNIT_2, (int16_t *)&Tx_16Data[3]);
+    pcnt_get_counter_value(PCNT_UNIT_3, (int16_t *)&Tx_16Data[4]);
 }
 
 // void IO_ENC_Input() {

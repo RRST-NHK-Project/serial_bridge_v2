@@ -156,9 +156,9 @@ void setup() {
         NULL);
 
     xTaskCreate(
-        IO_Task,   // タスク関数
-        "IO_Task", // タスク名
-        2048,      // スタックサイズ（words）
+        ROBOMAS_IO_Task,   // タスク関数
+        "ROBOMAS_IO_Task", // タスク名
+        2048,              // スタックサイズ（words）
         NULL,
         11, // 優先度
         NULL);
