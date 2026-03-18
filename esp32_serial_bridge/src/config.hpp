@@ -20,6 +20,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // #define MODE_ROBOMAS
 // #define MODE_ROBOMAS_PLUS_OUTPUT
 // #define MODE_ROBOMAS_PLUS_INPUT
+// #define MODE_ROBOMAS_PLUS_IO
 // #define MODE_DEBUG
 
 // ================= MD関連 =================
@@ -59,7 +60,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define SERVO4_MAX_DEG 270
 #define SERVO4_INIT_DEG 0
 
-// ================= 詳細設定（通常は変更不要） =================
+// ================= 高度な設定（通常は変更不要） =================
 
 // 以下の設定は必要に応じて変更
 #define ENABLE_LED 1          // 状態表示LEDを有効にする場合1に設定

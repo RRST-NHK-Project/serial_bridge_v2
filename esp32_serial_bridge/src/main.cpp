@@ -143,6 +143,26 @@ void setup() {
         4, // 優先度
         NULL);
 
+#elif defined(MODE_ROBOMAS_PLUS_IO)
+
+    robomas_init();
+
+    xTaskCreate(
+        M3508_Task,   // タスク関数
+        "M3508_Task", // タスク名
+        2048,         // スタックサイズ（words）
+        NULL,
+        9, // 優先度
+        NULL);
+
+    xTaskCreate(
+        IO_Task,   // タスク関数
+        "IO_Task", // タスク名
+        2048,      // スタックサイズ（words）
+        NULL,
+        11, // 優先度
+        NULL);
+
 #elif defined(MODE_DEBUG)
     // デバッグモード初期化
 
@@ -175,7 +195,7 @@ void setup() {
 #endif
 
 #if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
-     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_DEBUG)) != 1
+     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_ROBOMAS_PLUS_IO) + defined(MODE_DEBUG)) != 1
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }

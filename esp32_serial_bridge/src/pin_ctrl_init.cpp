@@ -90,6 +90,17 @@ void IO_init() {
     pinMode(SW4, INPUT_PULLUP);
     pinMode(SW7, INPUT_PULLUP);
     pinMode(SW8, INPUT_PULLUP);
+
+    // トランジスタのピンを出力に設定
+    pinMode(TR1, OUTPUT);
+    pinMode(TR2, OUTPUT);
+    pinMode(TR3, OUTPUT);
+    pinMode(TR4, OUTPUT);
+    pinMode(TR5, OUTPUT);
+    if (ENABLE_EXTRA_TR_PIN) {
+        pinMode(TR6, OUTPUT);
+        pinMode(TR7, OUTPUT);
+    }
 }
 
 // エンコーダ4つ分の初期化

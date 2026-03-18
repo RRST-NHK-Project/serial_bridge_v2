@@ -18,6 +18,7 @@ void TR_Output();
 void ENC_Input();
 void SW_Input();
 void IO_MD_Output();
+void IO_TR_Output();
 void IO_ENC_Input();
 void IO_SW_Input();
 
@@ -57,6 +58,7 @@ void IO_Task(void *) {
 
     while (1) {
         IO_MD_Output();
+        IO_TR_Output();
         IO_ENC_Input();
         IO_SW_Input();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CTRL_PERIOD_MS));
@@ -144,8 +146,10 @@ void TR_Output() {
     digitalWrite(TR3, Rx_16Data[19] ? HIGH : LOW);
     digitalWrite(TR4, Rx_16Data[20] ? HIGH : LOW);
     digitalWrite(TR5, Rx_16Data[21] ? HIGH : LOW);
-    digitalWrite(TR6, Rx_16Data[22] ? HIGH : LOW);
-    digitalWrite(TR7, Rx_16Data[23] ? HIGH : LOW);
+    if (ENABLE_EXTRA_TR_PIN) {
+        digitalWrite(TR6, Rx_16Data[22] ? HIGH : LOW);
+        digitalWrite(TR7, Rx_16Data[23] ? HIGH : LOW);
+    }
 }
 
 void IO_MD_Output() {
@@ -161,6 +165,18 @@ void IO_MD_Output() {
 
     ledcWrite(0, abs(Rx16Data_local[1]));
     ledcWrite(1, abs(Rx16Data_local[2]));
+}
+
+void IO_TR_Output() {
+    digitalWrite(TR1, Rx_16Data[17] ? HIGH : LOW);
+    digitalWrite(TR2, Rx_16Data[18] ? HIGH : LOW);
+    digitalWrite(TR3, Rx_16Data[19] ? HIGH : LOW);
+    digitalWrite(TR4, Rx_16Data[20] ? HIGH : LOW);
+    digitalWrite(TR5, Rx_16Data[21] ? HIGH : LOW);
+    if (ENABLE_EXTRA_TR_PIN) {
+        digitalWrite(TR6, Rx_16Data[22] ? HIGH : LOW);
+        digitalWrite(TR7, Rx_16Data[23] ? HIGH : LOW);
+    }
 }
 
 void IO_ENC_Input() {
