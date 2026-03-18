@@ -3,6 +3,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int16_multi_array.hpp>
 
+#include <cerrno>
+#include <cstring>
 #include <deque>
 #include <fcntl.h>
 #include <sstream>
@@ -11,6 +13,17 @@
 
 constexpr size_t TX16NUM = 24;
 constexpr size_t RX16NUM = 17;
+
+// 再接続を試みるインターバル
+constexpr auto RECONNECT_INTERVAL = std::chrono::seconds(3);
+
+// RX タイムアウト: この時間内にデータを受信しなければポートを破棄する
+constexpr auto RX_TIMEOUT = std::chrono::seconds(2);
+
+// EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
+static bool is_disconnect_error(int err) {
+    return err == EIO || err == ENODEV || err == ENXIO;
+}
 
 // コメントそのうち整備します
 
@@ -26,28 +39,14 @@ constexpr size_t RX16NUM = 17;
 SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port)
     : Node("serial_bridge_" + std::to_string(device_id)),
       device_id_(device_id),
-      fd_(-1) {
+      fd_(-1),
+      port_(port),
+      last_reconnect_attempt_(std::chrono::steady_clock::now() - RECONNECT_INTERVAL),
+      last_rx_time_(std::chrono::steady_clock::now()) {
 
     RCLCPP_INFO(this->get_logger(),
                 "Device ID 0x%02X → Port %s",
-                device_id_, port.c_str());
-
-    // ---------- serial open ----------
-    fd_ = open(port.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd_ < 0) {
-        RCLCPP_ERROR(this->get_logger(), "Failed to open serial port");
-        return;
-    }
-
-    termios tty{};
-    tcgetattr(fd_, &tty);
-    cfmakeraw(&tty);
-    cfsetispeed(&tty, B115200);
-    cfsetospeed(&tty, B115200);
-    tty.c_cflag |= (CLOCAL | CREAD);
-    tty.c_cc[VMIN] = 0;
-    tty.c_cc[VTIME] = 0;
-    tcsetattr(fd_, TCSANOW, &tty);
+                device_id_, port_.c_str());
 
     // ---------- ROS Pub/Sub ----------
     rx_pub_ = this->create_publisher<std_msgs::msg::Int16MultiArray>(
@@ -62,18 +61,101 @@ SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port)
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(20), // 短くしすぎるとマイコンの処理が追いつかなくなるので注意
         std::bind(&SerialBridgeNode::update, this));
+
+    // 初回接続を試みる（失敗してもタイマーで再試行）
+    try_open_port();
+}
+
+void SerialBridgeNode::close_port() {
+    if (fd_ >= 0) {
+        close(fd_);
+        fd_ = -1;
+    }
+    connected_ = false;
+    rx_buffer_.clear();
+}
+
+bool SerialBridgeNode::try_open_port() {
+    close_port();
+
+    fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd_ < 0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "Cannot open %s: %s — will retry in %ld s",
+                    port_.c_str(), strerror(errno),
+                    static_cast<long>(RECONNECT_INTERVAL.count()));
+        return false;
+    }
+
+    termios tty{};
+    tcgetattr(fd_, &tty);
+    cfmakeraw(&tty);
+    cfsetispeed(&tty, B115200);
+    cfsetospeed(&tty, B115200);
+    tty.c_cflag |= (CLOCAL | CREAD);
+    tty.c_cc[VMIN] = 0;
+    tty.c_cc[VTIME] = 0;
+    tcsetattr(fd_, TCSANOW, &tty);
+
+    // カーネルの送受信バッファに残った古いデータを破棄する。
+    // スキャナが同じポートを一時的に開いて読み込んだ後に残ったバイト列や、
+    // 切断前の途中フレームがバッファに残っていると START_BYTE 同期が取れなくなる。
+    if (tcflush(fd_, TCIOFLUSH) < 0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "tcflush failed on %s: %s — stale bytes may remain",
+                    port_.c_str(), strerror(errno));
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Connected to %s", port_.c_str());
+    connected_ = true;
+    last_rx_time_ = std::chrono::steady_clock::now();
+    return true;
 }
 
 /* ================= RX ================= */
 
 void SerialBridgeNode::update() {
+    // 未接続の場合は再接続を試みる（インターバル制限あり）
+    if (fd_ < 0) {
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_reconnect_attempt_ >= RECONNECT_INTERVAL) {
+            last_reconnect_attempt_ = now;
+            try_open_port();
+        }
+        return;
+    }
+
     constexpr uint8_t START_BYTE = 0xAA;
     // static std::deque<uint8_t> rx_buffer;セグフォ防止のためメンバ変数へ移動
 
     uint8_t buf[128];
     int n = read(fd_, buf, sizeof(buf));
-    if (n <= 0)
+    if (n < 0) {
+        if (is_disconnect_error(errno)) {
+            RCLCPP_WARN(this->get_logger(),
+                        "Device disconnected from %s — waiting for reconnection",
+                        port_.c_str());
+            close_port();
+            last_reconnect_attempt_ = std::chrono::steady_clock::now();
+        } else {
+            RCLCPP_DEBUG(this->get_logger(), "read error on %s: %s", port_.c_str(), strerror(errno));
+        }
         return;
+    }
+    if (n == 0) {
+        // データなし: タイムアウトチェック
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_rx_time_ >= RX_TIMEOUT) {
+            RCLCPP_WARN(this->get_logger(),
+                        "RX timeout on %s — no data for %ld s, closing port",
+                        port_.c_str(), static_cast<long>(RX_TIMEOUT.count()));
+            close_port();
+            last_reconnect_attempt_ = std::chrono::steady_clock::now();
+        }
+        return;
+    }
+
+    last_rx_time_ = std::chrono::steady_clock::now();
 
     for (int i = 0; i < n; i++)
         rx_buffer_.push_back(buf[i]);
@@ -157,6 +239,9 @@ void SerialBridgeNode::update() {
 void SerialBridgeNode::tx_callback(
     const std_msgs::msg::Int16MultiArray::SharedPtr msg) {
 
+    if (fd_ < 0)
+        return; // 未接続時は送信しない
+
     if (msg->data.size() < TX16NUM)
         return;
 
@@ -180,5 +265,15 @@ void SerialBridgeNode::tx_callback(
 
     frame[3 + LEN] = checksum;
 
-    write(fd_, frame, sizeof(frame));
+    if (write(fd_, frame, sizeof(frame)) < 0) {
+        if (is_disconnect_error(errno)) {
+            RCLCPP_WARN(this->get_logger(),
+                        "Device disconnected from %s (write error) — waiting for reconnection",
+                        port_.c_str());
+            close_port();
+            last_reconnect_attempt_ = std::chrono::steady_clock::now();
+        } else {
+            RCLCPP_DEBUG(this->get_logger(), "write error on %s: %s", port_.c_str(), strerror(errno));
+        }
+    }
 }

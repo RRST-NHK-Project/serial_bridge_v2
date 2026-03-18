@@ -21,6 +21,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #include <glob.h>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <termios.h>
 #include <unistd.h>
@@ -139,13 +140,19 @@ static int open_serial_port(const std::string &port) {
 
 //
 // 全ポートを走査して、ID → ポート名 の map を返す
+// skip_ports に含まれるポートはスキャン対象外（既に使用中のポートを避けるため）
 //
-std::map<uint8_t, std::string> detect_serial_devices() {
+std::map<uint8_t, std::string> detect_serial_devices(const std::set<std::string> &skip_ports) {
     std::map<uint8_t, std::string> result;
     auto ports = list_serial_ports();
     std::cout << "[SCAN] Total ports found: " << ports.size() << std::endl;
 
     for (auto &p : ports) {
+        if (skip_ports.count(p)) {
+            std::cout << "[SCAN] Skipping " << p << " (already in use)" << std::endl;
+            continue;
+        }
+
         std::cout << "[CHECK] Opening port: " << p << std::endl;
         int fd = open_serial_port(p);
         if (fd < 0) {
