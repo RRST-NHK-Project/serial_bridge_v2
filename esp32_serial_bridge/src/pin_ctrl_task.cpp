@@ -21,6 +21,7 @@ void IO_MD_Output();
 void IO_TR_Output();
 void IO_ENC_Input();
 void IO_SW_Input();
+void ROBOMAS_IO_ENC_Input();
 
 // ================= TASK =================
 
