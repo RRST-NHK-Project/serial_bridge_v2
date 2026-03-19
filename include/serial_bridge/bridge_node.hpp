@@ -9,7 +9,9 @@
 
 class SerialBridgeNode : public rclcpp::Node {
 public:
-    SerialBridgeNode(uint8_t device_id, const std::string &port);
+    SerialBridgeNode(uint8_t device_id, const std::string &port,
+                     double rx_timeout_sec = 2.0,
+                     double reconnect_interval_sec = 3.0);
 
     // スキャンスレッドから安全に参照可能な状態照会
     bool is_connected() const { return connected_.load(); }
@@ -25,6 +27,8 @@ private:
     std::atomic<bool> connected_{false};
     uint8_t device_id_;
     std::string port_;
+    std::chrono::steady_clock::duration reconnect_interval_;
+    std::chrono::steady_clock::duration rx_timeout_;
     std::chrono::steady_clock::time_point last_reconnect_attempt_;
     std::chrono::steady_clock::time_point last_rx_time_;
 
