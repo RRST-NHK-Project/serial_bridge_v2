@@ -13,6 +13,29 @@ int main(int argc, char *argv[]) {
 
     auto debug_node = std::make_shared<rclcpp::Node>("serial_bridge_status");
 
+    // ---------- パラメータ宣言 ----------
+    debug_node->declare_parameter("excluded_ports", std::vector<std::string>{});
+    debug_node->declare_parameter("rx_timeout_sec", 2.0);
+    debug_node->declare_parameter("reconnect_interval_sec", 3.0);
+    debug_node->declare_parameter("scan_interval_ms", 5000);
+
+    // ---------- パラメータ読み込み ----------
+    auto excluded_ports_vec =
+        debug_node->get_parameter("excluded_ports").as_string_array();
+    const std::set<std::string> excluded_ports(excluded_ports_vec.begin(),
+                                               excluded_ports_vec.end());
+    const double rx_timeout_sec =
+        debug_node->get_parameter("rx_timeout_sec").as_double();
+    const double reconnect_interval_sec =
+        debug_node->get_parameter("reconnect_interval_sec").as_double();
+    const int scan_interval_ms =
+        debug_node->get_parameter("scan_interval_ms").as_int();
+
+    if (!excluded_ports.empty()) {
+        for (const auto &p : excluded_ports)
+            RCLCPP_INFO(debug_node->get_logger(), "Excluded port: %s", p.c_str());
+    }
+
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(debug_node);
 
@@ -33,7 +56,7 @@ int main(int argc, char *argv[]) {
                 skip = known_ports;
             }
 
-            auto devices = detect_serial_devices(skip);
+            auto devices = detect_serial_devices(skip, excluded_ports);
 
             {
                 std::lock_guard<std::mutex> lock(map_mutex);
@@ -44,7 +67,9 @@ int main(int argc, char *argv[]) {
                         RCLCPP_INFO(debug_node->get_logger(),
                                     "New device found: ID=0x%02X port=%s",
                                     id, port.c_str());
-                        auto node = std::make_shared<SerialBridgeNode>(id, port);
+                        auto node = std::make_shared<SerialBridgeNode>(id, port,
+                                                                        rx_timeout_sec,
+                                                                        reconnect_interval_sec);
                         node_map[id] = node;
                         known_ports.insert(port);
                         executor.add_node(node);
@@ -58,7 +83,9 @@ int main(int argc, char *argv[]) {
                                     id, port.c_str(), it->second->get_port().c_str());
                         executor.remove_node(it->second);
                         known_ports.erase(it->second->get_port());
-                        auto node = std::make_shared<SerialBridgeNode>(id, port);
+                        auto node = std::make_shared<SerialBridgeNode>(id, port,
+                                                                        rx_timeout_sec,
+                                                                        reconnect_interval_sec);
                         it->second = node;
                         known_ports.insert(port);
                         executor.add_node(node);
@@ -68,8 +95,7 @@ int main(int argc, char *argv[]) {
             }
 
             // 次のスキャンまで待機（100ms 刻みで running フラグを確認）
-            constexpr int SCAN_INTERVAL_MS = 5000;
-            for (int i = 0; i < SCAN_INTERVAL_MS / 100 && running && rclcpp::ok(); i++)
+            for (int i = 0; i < scan_interval_ms / 100 && running && rclcpp::ok(); i++)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });

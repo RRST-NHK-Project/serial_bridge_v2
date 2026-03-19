@@ -142,7 +142,8 @@ static int open_serial_port(const std::string &port) {
 // 全ポートを走査して、ID → ポート名 の map を返す
 // skip_ports に含まれるポートはスキャン対象外（既に使用中のポートを避けるため）
 //
-std::map<uint8_t, std::string> detect_serial_devices(const std::set<std::string> &skip_ports) {
+std::map<uint8_t, std::string> detect_serial_devices(const std::set<std::string> &skip_ports,
+                                                       const std::set<std::string> &excluded_ports) {
     std::map<uint8_t, std::string> result;
     auto ports = list_serial_ports();
     std::cout << "[SCAN] Total ports found: " << ports.size() << std::endl;
@@ -150,6 +151,10 @@ std::map<uint8_t, std::string> detect_serial_devices(const std::set<std::string>
     for (auto &p : ports) {
         if (skip_ports.count(p)) {
             std::cout << "[SCAN] Skipping " << p << " (already in use)" << std::endl;
+            continue;
+        }
+        if (excluded_ports.count(p)) {
+            std::cout << "[SCAN] Skipping " << p << " (excluded by config)" << std::endl;
             continue;
         }
 

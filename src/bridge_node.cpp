@@ -14,12 +14,6 @@
 constexpr size_t TX16NUM = 24;
 constexpr size_t RX16NUM = 17;
 
-// 再接続を試みるインターバル
-constexpr auto RECONNECT_INTERVAL = std::chrono::seconds(3);
-
-// RX タイムアウト: この時間内にデータを受信しなければポートを破棄する
-constexpr auto RX_TIMEOUT = std::chrono::seconds(2);
-
 // EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
 static bool is_disconnect_error(int err) {
     return err == EIO || err == ENODEV || err == ENXIO;
@@ -36,12 +30,18 @@ static bool is_disconnect_error(int err) {
 [last] CHECKSUM = ID ^ LEN ^ DATA...
 */
 
-SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port)
+SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port,
+                                   double rx_timeout_sec,
+                                   double reconnect_interval_sec)
     : Node("serial_bridge_" + std::to_string(device_id)),
       device_id_(device_id),
       fd_(-1),
       port_(port),
-      last_reconnect_attempt_(std::chrono::steady_clock::now() - RECONNECT_INTERVAL),
+      reconnect_interval_(std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+          std::chrono::duration<double>(reconnect_interval_sec))),
+      rx_timeout_(std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+          std::chrono::duration<double>(rx_timeout_sec))),
+      last_reconnect_attempt_(std::chrono::steady_clock::now() - reconnect_interval_),
       last_rx_time_(std::chrono::steady_clock::now()) {
 
     RCLCPP_INFO(this->get_logger(),
@@ -81,9 +81,9 @@ bool SerialBridgeNode::try_open_port() {
     fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
     if (fd_ < 0) {
         RCLCPP_WARN(this->get_logger(),
-                    "Cannot open %s: %s — will retry in %ld s",
+                    "Cannot open %s: %s — will retry in %.1f s",
                     port_.c_str(), strerror(errno),
-                    static_cast<long>(RECONNECT_INTERVAL.count()));
+                    std::chrono::duration<double>(reconnect_interval_).count());
         return false;
     }
 
@@ -118,7 +118,7 @@ void SerialBridgeNode::update() {
     // 未接続の場合は再接続を試みる（インターバル制限あり）
     if (fd_ < 0) {
         auto now = std::chrono::steady_clock::now();
-        if (now - last_reconnect_attempt_ >= RECONNECT_INTERVAL) {
+        if (now - last_reconnect_attempt_ >= reconnect_interval_) {
             last_reconnect_attempt_ = now;
             try_open_port();
         }
@@ -145,10 +145,11 @@ void SerialBridgeNode::update() {
     if (n == 0) {
         // データなし: タイムアウトチェック
         auto now = std::chrono::steady_clock::now();
-        if (now - last_rx_time_ >= RX_TIMEOUT) {
+        if (now - last_rx_time_ >= rx_timeout_) {
             RCLCPP_WARN(this->get_logger(),
-                        "RX timeout on %s — no data for %ld s, closing port",
-                        port_.c_str(), static_cast<long>(RX_TIMEOUT.count()));
+                        "RX timeout on %s — no data for %.1f s, closing port",
+                        port_.c_str(),
+                        std::chrono::duration<double>(rx_timeout_).count());
             close_port();
             last_reconnect_attempt_ = std::chrono::steady_clock::now();
         }
