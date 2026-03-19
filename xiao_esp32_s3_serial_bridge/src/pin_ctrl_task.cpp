@@ -4,6 +4,7 @@
 Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 ====================================================================*/
 
+#include "SDM15.h"
 #include "defs.hpp"
 #include "driver/pcnt.h"
 #include "frame_data.hpp"
@@ -13,22 +14,41 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 constexpr uint32_t CTRL_PERIOD_MS = 5; // ピン更新周期（ミリ秒）
 
 void SDM15_Task(void *);
-void SDM15_Input();
+
+HardwareSerial SerialSDM(1);
+SDM15 sdm15(SerialSDM);
 
 // ================= TASK =================
 
 void SDM15_Task(void *pvParameters) {
-    (void)pvParameters; // 未使用パラメータの警告回避
 
-    SDM15_init(); // 初期化関数呼び出し
+    SerialSDM.begin(460800, SERIAL_8N1, SDM15_TX, SDM15_RX);
 
-    while (true) {
-        SDM15_Input(); // 入力処理関数呼び出し
+    // 高速通信対策
+    SerialSDM.setRxBufferSize(2048);
 
-        vTaskDelay(pdMS_TO_TICKS(CTRL_PERIOD_MS)); // タスクの周期を制御
+    vTaskDelay(pdMS_TO_TICKS(1000)); // 安定待ち
+
+    sdm15.StartScan();
+
+    while (1) {
+
+        if (SerialSDM.available()) {
+
+            ScanData data = sdm15.GetScanData();
+
+            if (!data.checksum_error) {
+
+                // 受信データを送信用配列に格納
+                Tx_16Data[0] = int16_t(data.distance);
+                Tx_16Data[1] = int16_t(data.intensity);
+                Tx_16Data[2] = int16_t(data.disturb);
+
+            } else {
+                ; // エラー処理など
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(CTRL_PERIOD_MS));
     }
-}
-
-void SDM15_Input() {
-    ;
 }

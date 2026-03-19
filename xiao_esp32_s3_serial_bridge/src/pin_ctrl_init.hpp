@@ -9,4 +9,3 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #include <Arduino.h>
 
 // 関数のプロトタイプ宣言
-void SDM15_init();

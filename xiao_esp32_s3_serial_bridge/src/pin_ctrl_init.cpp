@@ -11,8 +11,3 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #include <Arduino.h>
 
 constexpr uint32_t CTRL_PERIOD_MS = 5; // ピン更新周期（ミリ秒）
-
-void SDM15_init();
-
-void SDM15_init() {
-}

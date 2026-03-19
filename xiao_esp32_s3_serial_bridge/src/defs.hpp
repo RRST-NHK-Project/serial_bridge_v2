@@ -26,6 +26,10 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // 状態表示LED
 #define LED 0
 
+// SDM15
+#define SDM15_TX 19
+#define SDM15_RX 21
+
 // エンコーダ
 #define ENC1_A 19
 #define ENC1_B 21

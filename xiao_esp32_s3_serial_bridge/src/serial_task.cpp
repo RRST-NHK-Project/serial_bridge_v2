@@ -75,13 +75,7 @@ uint8_t rx_buf[Rx16NUM * 2];
 uint8_t rx_index = 0;
 uint8_t rx_checksum = 0;
 
-// 入力モードでは送信周期を短くする
-#if defined(MODE_INPUT) || defined(MODE_ROBOMAS_PLUS_INPUT)
 constexpr uint32_t TX_PERIOD_MS = 20; // 送信周期（ミリ秒）
-#else
-constexpr uint32_t TX_PERIOD_MS = 100; // 送信周期（ミリ秒）
-#endif
-
 constexpr uint32_t RX_PERIOD_MS = 10; // 受信周期（ミリ秒）未使用なので削除予定
 
 void send_frame();
