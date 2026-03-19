@@ -16,6 +16,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // モードの設定，どれか一つをコメントアウト解除する
 #define MODE_SDM15
 // #define MODE_ENC
+// #define MODE_DEBUG
 
 // ================= 高度な設定（通常は変更不要） =================
 

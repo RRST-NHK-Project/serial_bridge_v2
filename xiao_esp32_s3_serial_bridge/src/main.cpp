@@ -12,10 +12,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 
 #include "config.hpp"
 #include "defs.hpp"
-#include "led_task.hpp"
-#include "pid_task.hpp"
 #include "pin_ctrl_task.hpp"
-#include "robomas.hpp"
 #include "serial_task.hpp"
 #include <Arduino.h>
 // ================= SETUP =================
@@ -50,152 +47,29 @@ void setup() {
         NULL);
 
 // モードに応じた初期化
-#if defined(MODE_OUTPUT)
+#if defined(MODE_SDM15)
     // 出力モード初期化
     xTaskCreate(
-        Output_Task,   // タスク関数
-        "Output_Task", // タスク名
-        2048,          // スタックサイズ（words）
+        SDM15_Task,   // タスク関数
+        "SDM15_Task", // タスク名
+        2048,         // スタックサイズ（words）
         NULL,
         11, // 優先度
         NULL);
 
-#elif defined(MODE_INPUT)
-    // 入力モード初期化
-    xTaskCreate(
-        Input_Task,   // タスク関数
-        "Input_Task", // タスク名
-        1024,         // スタックサイズ（words）
-        NULL,
-        4, // 優先度
-        NULL);
-
-#elif defined(MODE_IO)
-    // 入出力モード初期化
-    xTaskCreate(
-        IO_Task,   // タスク関数
-        "IO_Task", // タスク名
-        2048,      // スタックサイズ（words）
-        NULL,
-        11, // 優先度
-        NULL);
-
-#elif defined(MODE_ROBOMAS)
-    // ロボマスモード初期化
-
-    robomas_init();
-
-    xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
-        2048,         // スタックサイズ（words）
-        NULL,
-        9, // 優先度
-        NULL);
-
-    xTaskCreate(
-        PID_Task,   // タスク関数
-        "PID_Task", // タスク名
-        2048,       // スタックサイズ（words）
-        NULL,
-        11, // 優先度
-        NULL);
-
-#elif defined(MODE_ROBOMAS_PLUS_OUTPUT)
-    // ロボマスモード初期化
-
-    robomas_init();
-
-    xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
-        2048,         // スタックサイズ（words）
-        NULL,
-        9, // 優先度
-        NULL);
-
-    // 出力モード初期化
-    xTaskCreate(
-        Output_Task,   // タスク関数
-        "Output_Task", // タスク名
-        2048,          // スタックサイズ（words）
-        NULL,
-        8, // 優先度
-        NULL);
-
-#elif defined(MODE_ROBOMAS_PLUS_INPUT)
-
-    robomas_init();
-
-    xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
-        2048,         // スタックサイズ（words）
-        NULL,
-        9, // 優先度
-        NULL);
-
-    xTaskCreate(
-        Input_Task,   // タスク関数
-        "Input_Task", // タスク名
-        1024,         // スタックサイズ（words）
-        NULL,
-        4, // 優先度
-        NULL);
-
-#elif defined(MODE_ROBOMAS_PLUS_IO)
-
-    robomas_init();
-
-    xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
-        2048,         // スタックサイズ（words）
-        NULL,
-        9, // 優先度
-        NULL);
-
-    xTaskCreate(
-        ROBOMAS_IO_Task,   // タスク関数
-        "ROBOMAS_IO_Task", // タスク名
-        2048,              // スタックサイズ（words）
-        NULL,
-        11, // 優先度
-        NULL);
+#elif defined(MODE_ENC)
+    // エンコーダモード初期化
+    ;
 
 #elif defined(MODE_DEBUG)
     // デバッグモード初期化
-
-    // xTaskCreate(
-    //     LED_PWM_Task,   // タスク関数
-    //     "LED_PWM_Task", // タスク名
-    //     1024,           // スタックサイズ（words）
-    //     NULL,
-    //     9, // 優先度
-    //     NULL)0;
-
-    // xTaskCreate(
-    //     LED_Blink100_Task,   // タスク関数
-    //     "LED_Blink100_Task", // タスク名
-    //     1024,                // スタックサイズ（words）
-    //     NULL,
-    //     9, // 優先度
-    //     NULL);
-
-    xTaskCreate(
-        PID_Task,   // タスク関数
-        "PID_Task", // タスク名
-        2048,       // スタックサイズ（words）
-        NULL,
-        11, // 優先度
-        NULL);
+    ;
 
 #else
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
-     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_ROBOMAS_PLUS_IO) + defined(MODE_DEBUG)) != 1
+#if (defined(MODE_SDM15) + defined(MODE_ENC) + defined(MODE_DEBUG) != 1)
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }
