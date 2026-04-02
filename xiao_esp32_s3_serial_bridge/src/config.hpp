@@ -11,14 +11,28 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // ================= 基本設定 =================
 
 // IDの設定，ROS側からマイコンを識別するために使用，すべてのマイコンで異なる値にすること
-#define DEVICE_ID 0x01
+#define DEVICE_ID 0x09
 
 // モードの設定，どれか一つをコメントアウト解除する
-#define MODE_SDM15
+// #define MODE_SDM15
 // #define MODE_ENC
+#define MODE_IR
 // #define MODE_DEBUG
 
 // ================= 高度な設定（通常は変更不要） =================
 
 // 以下の設定は必要に応じて変更
 #define ENABLE_LED 1 // 状態表示LEDを有効にする場合1に設定
+
+// IR受信モード設定
+// 使用するIRレシーバの信号線を接続するGPIO番号
+#define IR_RECEIVE_PIN D10
+// IR受信タスクの実行周期（ミリ秒）
+#define IR_TASK_PERIOD_MS 5
+
+// メーカー(=IRプロトコル)のフィルタ設定
+// 0: 全プロトコルを受信, 1: 指定プロトコルのみ受信
+#define IR_FILTER_ENABLE 0
+// IR_FILTER_ENABLE=1 のときに有効
+// 例: SONY, NEC, PANASONIC, JVC, SAMSUNG, RC5, RC6
+#define IR_FILTER_PROTOCOL LG

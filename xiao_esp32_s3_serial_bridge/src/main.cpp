@@ -57,6 +57,17 @@ void setup() {
         11, // 優先度
         NULL);
 
+#elif defined(MODE_IR)
+    // 赤外線モード初期化
+    ;
+    xTaskCreate(
+        IR_Task,   // タスク関数
+        "IR_Task", // タスク名
+        2048,      // スタックサイズ（words）
+        NULL,
+        11, // 優先度
+        NULL);
+
 #elif defined(MODE_ENC)
     // エンコーダモード初期化
     ;
@@ -69,7 +80,7 @@ void setup() {
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_SDM15) + defined(MODE_ENC) + defined(MODE_DEBUG) != 1)
+#if (defined(MODE_SDM15) + defined(MODE_ENC) + defined(MODE_IR) + defined(MODE_DEBUG) != 1)
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }
