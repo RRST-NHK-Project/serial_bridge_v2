@@ -32,7 +32,9 @@ namespace {
 
 void SDM15_Task(void *pvParameters) {
 
-    SerialSDM.begin(460800, SERIAL_8N1, SDM15_TX, SDM15_RX);
+    // HardwareSerial.begin() は (baud, config, rxPin, txPin) の順序
+    SerialSDM.begin(460800, SERIAL_8N1, SDM15_RX, SDM15_TX);
+    SerialSDM.setTimeout(20);
 
     // 高速通信対策
     SerialSDM.setRxBufferSize(2048);
@@ -43,7 +45,7 @@ void SDM15_Task(void *pvParameters) {
 
     while (1) {
 
-        if (SerialSDM.available()) {
+        if (SerialSDM.available() >= 9) {
 
             ScanData data = sdm15.GetScanData();
 

@@ -27,8 +27,8 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define LED 0
 
 // SDM15
-#define SDM15_TX 19
-#define SDM15_RX 21
+#define SDM15_TX SDM15_UART_TX_PIN
+#define SDM15_RX SDM15_UART_RX_PIN
 
 // エンコーダ
 #define ENC1_A 19

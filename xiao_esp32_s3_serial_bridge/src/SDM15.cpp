@@ -117,7 +117,9 @@ bool SDM15::StartScan() {
 
     // receive byte data response : PACKET_HED1, PACKET_HED2, START_SCAN, NO_DATA,
     // checksum
-    _sensor_serial.readBytes(recv, sizeof(recv));
+    if (_sensor_serial.readBytes(recv, sizeof(recv)) != sizeof(recv)) {
+        return false;
+    }
 
     // calculate checksum
     checksum = CalculateChecksum(recv, sizeof(recv));
@@ -155,12 +157,12 @@ bool SDM15::StopScan() {
 }
 
 ScanData SDM15::GetScanData() {
-    // clear buffer
-    ClearBuffer();
-
     // receive byte data response : PACKET_HED1, PACKET_HED2, START_SCAN,
     // data_length, data[4], checksum
-    _sensor_serial.readBytes(scan_recv, sizeof(scan_recv));
+    if (_sensor_serial.readBytes(scan_recv, sizeof(scan_recv)) != sizeof(scan_recv)) {
+        sdm15_data.checksum_error = true;
+        return sdm15_data;
+    }
 
     // calculate checksum
     checksum = CalculateChecksum(scan_recv, sizeof(scan_recv));
@@ -314,13 +316,15 @@ bool SDM15::RestoreFactorySettings() {
 
     // receive byte data response : PACKET_HED1, PACKET_HED2,
     // RESTORE_FACTORY_SETTINGS, NO_DATA, checksum
-    _sensor_serial.readBytes(recv, sizeof(recv));
+    if (_sensor_serial.readBytes(recv, sizeof(recv)) != sizeof(recv)) {
+        return false;
+    }
 
     // calculate checksum
     byte recv_checksum = CalculateChecksum(recv, sizeof(recv));
 
     // check checksum
-    if (recv_checksum != recv[5])
+    if (recv_checksum != recv[4])
         return false;
     else
         return true;

@@ -14,15 +14,22 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define DEVICE_ID 0x09
 
 // モードの設定，どれか一つをコメントアウト解除する
-// #define MODE_SDM15
+#define MODE_SDM15
 // #define MODE_ENC
-#define MODE_IR
+// #define MODE_IR
 // #define MODE_DEBUG
 
 // ================= 高度な設定（通常は変更不要） =================
 
 // 以下の設定は必要に応じて変更
 #define ENABLE_LED 1 // 状態表示LEDを有効にする場合1に設定
+
+// SDM15 UART設定
+// ボード配線に合わせて変更すること
+// XIAO ESP32S3 では GPIO3 はストラップピンのため外部機器接続時に起動/通信不安定の原因になりやすい
+// 既定は UART に使いやすい GPIO43(TX) / GPIO44(RX) を使用する
+#define SDM15_UART_TX_PIN 4
+#define SDM15_UART_RX_PIN 3
 
 // IR受信モード設定
 // 使用するIRレシーバの信号線を接続するGPIO番号
