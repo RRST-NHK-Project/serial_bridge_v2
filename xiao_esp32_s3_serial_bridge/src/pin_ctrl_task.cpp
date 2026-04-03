@@ -42,6 +42,7 @@ void SDM15_Task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(1000)); // 安定待ち
 
     sdm15.StartScan();
+    uint8_t decimation_count = 0;
 
     while (1) {
 
@@ -51,10 +52,19 @@ void SDM15_Task(void *pvParameters) {
 
             if (!data.checksum_error) {
 
+                decimation_count++;
+                if (decimation_count < SDM15_TX_DECIMATION) {
+                    continue;
+                }
+                decimation_count = 0;
+
                 // 受信データを送信用配列に格納
                 Tx_16Data[0] = int16_t(data.distance);
                 Tx_16Data[1] = int16_t(data.intensity);
                 Tx_16Data[2] = int16_t(data.disturb);
+
+                // 取りこぼし許容で最新値優先: 溜まった古い受信データを破棄
+                sdm15.DropPendingRx();
 
             } else {
                 ; // エラー処理など

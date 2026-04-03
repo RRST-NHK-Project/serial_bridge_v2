@@ -70,6 +70,7 @@ enum BaudRateHex {
 class SDM15 {
 public:
     explicit SDM15(HardwareSerial &serial) : _sensor_serial(serial) {}
+    void DropPendingRx();
     VersionInfo ObtainVersionInfo();
     TestResult SelfCheckTest();
     bool StartScan();

@@ -20,6 +20,10 @@ void SDM15::ClearBuffer() {
     }
 }
 
+void SDM15::DropPendingRx() {
+    ClearBuffer();
+}
+
 VersionInfo SDM15::ObtainVersionInfo() {
     // clear buffer
     ClearBuffer();
