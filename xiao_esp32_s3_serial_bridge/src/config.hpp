@@ -11,7 +11,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // ================= 基本設定 =================
 
 // IDの設定，ROS側からマイコンを識別するために使用，すべてのマイコンで異なる値にすること
-#define DEVICE_ID 0x00
+#define DEVICE_ID 0x09
 
 // モードの設定，どれか一つをコメントアウト解除する
 // #define MODE_SDM15
@@ -31,14 +31,6 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // 既定は UART に使いやすい GPIO43(TX) / GPIO44(RX) を使用する
 #define SDM15_UART_TX_PIN 4
 #define SDM15_UART_RX_PIN 3
-
-// SDM15値の間引き設定
-// 1: 毎フレーム反映, 2: 2フレームに1回, 4: 4フレームに1回
-#define SDM15_TX_DECIMATION 4
-
-// SDM15モード時のPC送信周期（ミリ秒）
-// 間引きと合わせて通信負荷を下げる
-#define SDM15_TX_PERIOD_MS 40
 
 // IR受信モード設定
 // 使用するIRレシーバの信号線を接続するGPIO番号
