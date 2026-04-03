@@ -22,6 +22,7 @@ private:
     void tx_callback(const std_msgs::msg::Int16MultiArray::SharedPtr msg);
     bool try_open_port();
     void close_port();
+    void maybe_log_status();
 
     int fd_;
     std::atomic<bool> connected_{false};
@@ -31,9 +32,20 @@ private:
     std::chrono::steady_clock::duration rx_timeout_;
     std::chrono::steady_clock::time_point last_reconnect_attempt_;
     std::chrono::steady_clock::time_point last_rx_time_;
+    std::chrono::steady_clock::time_point last_status_log_time_;
+    std::chrono::milliseconds status_log_period_{500};
 
     rclcpp::TimerBase::SharedPtr timer_;
     std::deque<uint8_t> rx_buffer_;
+
+    bool verbose_packet_log_{false};
+    uint64_t rx_frames_since_status_{0};
+    uint64_t rx_bytes_since_status_{0};
+    uint64_t dropped_bytes_since_status_{0};
+    uint64_t checksum_errors_since_status_{0};
+    uint64_t id_mismatch_since_status_{0};
+    uint64_t tx_frames_since_status_{0};
+    uint64_t tx_errors_since_status_{0};
 
     // pub,sub
     rclcpp::Publisher<std_msgs::msg::Int16MultiArray>::SharedPtr rx_pub_;

@@ -1,18 +1,18 @@
 #include "serial_bridge/bridge_node.hpp"
+#include "serial_bridge/config.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int16_multi_array.hpp>
 
+#include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <deque>
 #include <fcntl.h>
 #include <sstream>
 #include <termios.h>
 #include <unistd.h>
-
-constexpr size_t TX16NUM = 24;
-constexpr size_t RX16NUM = 17;
 
 // EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
 static bool is_disconnect_error(int err) {
@@ -42,11 +42,28 @@ SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port,
       rx_timeout_(std::chrono::duration_cast<std::chrono::steady_clock::duration>(
           std::chrono::duration<double>(rx_timeout_sec))),
       last_reconnect_attempt_(std::chrono::steady_clock::now() - reconnect_interval_),
-      last_rx_time_(std::chrono::steady_clock::now()) {
+      last_rx_time_(std::chrono::steady_clock::now()),
+      last_status_log_time_(std::chrono::steady_clock::now()) {
+
+    this->declare_parameter(
+        serial_bridge::config::kParamVerbosePacketLog,
+        serial_bridge::config::kVerbosePacketLogDefault);
+    this->declare_parameter(
+        serial_bridge::config::kParamStatusLogPeriodMs,
+        serial_bridge::config::kStatusLogPeriodMsDefault);
+    verbose_packet_log_ = this->get_parameter(
+                                  serial_bridge::config::kParamVerbosePacketLog)
+                              .as_bool();
+    const auto status_log_period_ms = this->get_parameter(
+                                              serial_bridge::config::kParamStatusLogPeriodMs)
+                                          .as_int();
+    status_log_period_ = std::chrono::milliseconds(
+        std::max<int64_t>(serial_bridge::config::kStatusLogPeriodMsMin, status_log_period_ms));
 
     RCLCPP_INFO(this->get_logger(),
-                "Device ID 0x%02X → Port %s",
-                device_id_, port_.c_str());
+                "Device ID 0x%02X -> Port %s (verbose_packet_log=%s, status_period=%ldms)",
+                device_id_, port_.c_str(), verbose_packet_log_ ? "true" : "false",
+                static_cast<long>(status_log_period_.count()));
 
     // ---------- ROS Pub/Sub ----------
     rx_pub_ = this->create_publisher<std_msgs::msg::Int16MultiArray>(
@@ -59,7 +76,7 @@ SerialBridgeNode::SerialBridgeNode(uint8_t device_id, const std::string &port,
 
     // ---------- timer ----------
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(20), // 短くしすぎるとマイコンの処理が追いつかなくなるので注意
+        std::chrono::milliseconds(serial_bridge::config::kUpdatePeriodMs),
         std::bind(&SerialBridgeNode::update, this));
 
     // 初回接続を試みる（失敗してもタイマーで再試行）
@@ -122,13 +139,14 @@ void SerialBridgeNode::update() {
             last_reconnect_attempt_ = now;
             try_open_port();
         }
+        maybe_log_status();
         return;
     }
 
-    constexpr uint8_t START_BYTE = 0xAA;
+    constexpr uint8_t START_BYTE = serial_bridge::config::kStartByte;
     // static std::deque<uint8_t> rx_buffer;セグフォ防止のためメンバ変数へ移動
 
-    uint8_t buf[128];
+    uint8_t buf[serial_bridge::config::kReadBufferSize];
     int n = read(fd_, buf, sizeof(buf));
     if (n < 0) {
         if (is_disconnect_error(errno)) {
@@ -140,6 +158,7 @@ void SerialBridgeNode::update() {
         } else {
             RCLCPP_DEBUG(this->get_logger(), "read error on %s: %s", port_.c_str(), strerror(errno));
         }
+        maybe_log_status();
         return;
     }
     if (n == 0) {
@@ -153,10 +172,12 @@ void SerialBridgeNode::update() {
             close_port();
             last_reconnect_attempt_ = std::chrono::steady_clock::now();
         }
+        maybe_log_status();
         return;
     }
 
     last_rx_time_ = std::chrono::steady_clock::now();
+    rx_bytes_since_status_ += static_cast<uint64_t>(n);
 
     for (int i = 0; i < n; i++)
         rx_buffer_.push_back(buf[i]);
@@ -168,6 +189,7 @@ void SerialBridgeNode::update() {
         // START 同期
         if (rx_buffer_.front() != START_BYTE) {
             rx_buffer_.pop_front();
+            dropped_bytes_since_status_++;
             continue;
         }
 
@@ -183,26 +205,30 @@ void SerialBridgeNode::update() {
             checksum ^= rx_buffer_[i];
 
         if (checksum != rx_buffer_[3 + length]) {
-            RCLCPP_WARN(this->get_logger(),
-                        "Checksum mismatch");
+            checksum_errors_since_status_++;
+            RCLCPP_DEBUG(this->get_logger(), "Checksum mismatch");
             rx_buffer_.pop_front();
+            dropped_bytes_since_status_++;
             continue;
         }
 
         // ID check
         uint8_t rx_id = rx_buffer_[1];
         if (rx_id != device_id_) {
-            RCLCPP_WARN(this->get_logger(),
-                        "ID mismatch rx=0x%02X expected=0x%02X",
-                        rx_id, device_id_);
+            id_mismatch_since_status_++;
+            RCLCPP_DEBUG(this->get_logger(),
+                         "ID mismatch rx=0x%02X expected=0x%02X",
+                         rx_id, device_id_);
             for (size_t i = 0; i < frame_size; i++)
                 rx_buffer_.pop_front();
             continue;
         }
 
         // 16bit data decode
-        int16_t values[RX16NUM] = {0};
-        size_t data16_count = std::min((size_t)(length / 2), RX16NUM);
+        int16_t values[serial_bridge::config::kRx16Num] = {0};
+        size_t data16_count = std::min(
+            static_cast<size_t>(length / 2),
+            serial_bridge::config::kRx16Num);
 
         for (size_t i = 0; i < data16_count; i++) {
             values[i] = (int16_t)((rx_buffer_[3 + i * 2] << 8) |
@@ -211,28 +237,32 @@ void SerialBridgeNode::update() {
 
         // publish
         std_msgs::msg::Int16MultiArray msg;
-        msg.data.assign(values, values + RX16NUM);
+        msg.data.assign(values, values + serial_bridge::config::kRx16Num);
         rx_pub_->publish(msg);
+        rx_frames_since_status_++;
 
-        // debug log
-        std::ostringstream oss;
-        oss << "[";
-        for (size_t i = 0; i < RX16NUM; i++) {
-            oss << values[i];
-            if (i + 1 < RX16NUM)
-                oss << ", ";
+        if (verbose_packet_log_) {
+            std::ostringstream oss;
+            oss << "[";
+            for (size_t i = 0; i < serial_bridge::config::kRx16Num; i++) {
+                oss << values[i];
+                if (i + 1 < serial_bridge::config::kRx16Num)
+                    oss << ", ";
+            }
+            oss << "]";
+
+            RCLCPP_INFO(this->get_logger(),
+                        "[ID 0x%02X] RX DATA: %s",
+                        device_id_, oss.str().c_str());
         }
-        oss << "]";
-
-        RCLCPP_INFO(this->get_logger(),
-                    "[ID 0x%02X] RX DATA: %s",
-                    device_id_, oss.str().c_str());
 
         // consume
         for (size_t i = 0; i < frame_size; i++)
             rx_buffer_.pop_front();
         processed++;
     }
+
+    maybe_log_status();
 }
 
 /* ================= TX ================= */
@@ -243,11 +273,11 @@ void SerialBridgeNode::tx_callback(
     if (fd_ < 0)
         return; // 未接続時は送信しない
 
-    if (msg->data.size() < TX16NUM)
+    if (msg->data.size() < serial_bridge::config::kTx16Num)
         return;
 
-    constexpr uint8_t START_BYTE = 0xAA;
-    constexpr uint8_t LEN = TX16NUM * 2;
+    constexpr uint8_t START_BYTE = serial_bridge::config::kStartByte;
+    constexpr uint8_t LEN = serial_bridge::config::kTx16Num * 2;
 
     uint8_t frame[1 + 1 + 1 + LEN + 1];
 
@@ -255,7 +285,7 @@ void SerialBridgeNode::tx_callback(
     frame[1] = device_id_;
     frame[2] = LEN;
 
-    for (size_t i = 0; i < TX16NUM; i++) {
+    for (size_t i = 0; i < serial_bridge::config::kTx16Num; i++) {
         frame[3 + i * 2] = (msg->data[i] >> 8) & 0xFF;
         frame[3 + i * 2 + 1] = msg->data[i] & 0xFF;
     }
@@ -274,7 +304,46 @@ void SerialBridgeNode::tx_callback(
             close_port();
             last_reconnect_attempt_ = std::chrono::steady_clock::now();
         } else {
+            tx_errors_since_status_++;
             RCLCPP_DEBUG(this->get_logger(), "write error on %s: %s", port_.c_str(), strerror(errno));
         }
+    } else {
+        tx_frames_since_status_++;
     }
+
+    maybe_log_status();
+}
+
+void SerialBridgeNode::maybe_log_status() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_status_log_time_ < status_log_period_) {
+        return;
+    }
+
+    const auto period_sec = std::chrono::duration<double>(now - last_status_log_time_).count();
+    const auto rx_hz = period_sec > 0.0 ? (static_cast<double>(rx_frames_since_status_) / period_sec) : 0.0;
+
+    RCLCPP_INFO(
+        this->get_logger(),
+        "[ID 0x%02X] status connected=%s rx_hz=%.1f rx_frames=%llu rx_bytes=%llu tx_ok=%llu tx_err=%llu chk_err=%llu id_mismatch=%llu dropped_bytes=%llu rx_buffer=%zu",
+        device_id_,
+        connected_.load() ? "true" : "false",
+        rx_hz,
+        static_cast<unsigned long long>(rx_frames_since_status_),
+        static_cast<unsigned long long>(rx_bytes_since_status_),
+        static_cast<unsigned long long>(tx_frames_since_status_),
+        static_cast<unsigned long long>(tx_errors_since_status_),
+        static_cast<unsigned long long>(checksum_errors_since_status_),
+        static_cast<unsigned long long>(id_mismatch_since_status_),
+        static_cast<unsigned long long>(dropped_bytes_since_status_),
+        rx_buffer_.size());
+
+    rx_frames_since_status_ = 0;
+    rx_bytes_since_status_ = 0;
+    dropped_bytes_since_status_ = 0;
+    checksum_errors_since_status_ = 0;
+    id_mismatch_since_status_ = 0;
+    tx_frames_since_status_ = 0;
+    tx_errors_since_status_ = 0;
+    last_status_log_time_ = now;
 }
