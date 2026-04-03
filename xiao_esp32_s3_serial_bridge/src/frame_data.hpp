@@ -26,6 +26,11 @@ MODE_IR時は以下のフォーマットで使用
 6: decodedRawData[31:16]
 7: decodedRawData[47:32]
 8: decodedRawData[63:48]
+
+MODE_HC_SR04時は以下のフォーマットで使用
+0: valid (1=有効, 0=タイムアウト)
+1: distance[mm]
+2: pulse_width[us]
 */
 
 extern volatile int16_t Rx_16Data[Rx16NUM];

@@ -14,9 +14,10 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define DEVICE_ID 0x00
 
 // モードの設定，どれか一つをコメントアウト解除する
-#define MODE_SDM15
+// #define MODE_SDM15
 // #define MODE_ENC
 // #define MODE_IR
+#define MODE_HC_SR04
 // #define MODE_DEBUG
 
 // ================= 高度な設定（通常は変更不要） =================
@@ -51,3 +52,13 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // IR_FILTER_ENABLE=1 のときに有効
 // 例: SONY, NEC, PANASONIC, JVC, SAMSUNG, RC5, RC6
 #define IR_FILTER_PROTOCOL LG
+
+// HC-SR04モード設定
+// Trig/Echoを接続するGPIO番号
+#define HC_SR04_TRIG_PIN D2
+#define HC_SR04_ECHO_PIN D1
+// 計測周期（ミリ秒）
+#define HC_SR04_TASK_PERIOD_MS 60
+// pulseIn() タイムアウト（マイクロ秒）
+// 30ms は約5m相当の往復時間
+#define HC_SR04_TIMEOUT_US 30000UL

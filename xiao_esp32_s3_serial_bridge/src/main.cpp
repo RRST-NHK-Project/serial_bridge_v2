@@ -68,6 +68,16 @@ void setup() {
         11, // 優先度
         NULL);
 
+#elif defined(MODE_HC_SR04)
+    // HC-SR04モード初期化
+    xTaskCreate(
+        HC_SR04_Task,   // タスク関数
+        "HC_SR04_Task", // タスク名
+        2048,           // スタックサイズ（words）
+        NULL,
+        11, // 優先度
+        NULL);
+
 #elif defined(MODE_ENC)
     // エンコーダモード初期化
     ;
@@ -80,7 +90,7 @@ void setup() {
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_SDM15) + defined(MODE_ENC) + defined(MODE_IR) + defined(MODE_DEBUG) != 1)
+#if (defined(MODE_SDM15) + defined(MODE_ENC) + defined(MODE_IR) + defined(MODE_HC_SR04) + defined(MODE_DEBUG) != 1)
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }

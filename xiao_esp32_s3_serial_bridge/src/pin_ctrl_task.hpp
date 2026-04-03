@@ -11,3 +11,4 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // 関数のプロトタイプ宣言
 void SDM15_Task(void *);
 void IR_Task(void *);
+void HC_SR04_Task(void *);

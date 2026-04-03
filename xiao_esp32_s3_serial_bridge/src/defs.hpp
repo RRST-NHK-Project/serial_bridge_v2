@@ -31,25 +31,9 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define SDM15_RX SDM15_UART_RX_PIN
 
 // エンコーダ
-#define ENC1_A 19
-#define ENC1_B 21
-#define ENC2_A 22
-#define ENC2_B 23
-#define ENC3_A 15
-#define ENC3_B 16
-#define ENC4_A 17
-#define ENC4_B 18
+#define ENC1_A 1
+#define ENC1_B 2
 
-// スイッチ
-#define SW1 5
-#define SW2 12
-#define SW3 13
-#define SW4 14
-#define SW5 15
-#define SW6 16
-#define SW7 17
-#define SW8 18
-
-// CAN
-#define CAN_RX 2
-#define CAN_TX 4
+// HC-SR04
+#define HC_SR04_TRIG HC_SR04_TRIG_PIN
+#define HC_SR04_ECHO HC_SR04_ECHO_PIN

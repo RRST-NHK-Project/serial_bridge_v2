@@ -18,6 +18,7 @@ constexpr uint32_t CTRL_PERIOD_MS = 5; // ピン更新周期（ミリ秒）
 
 void SDM15_Task(void *);
 void IR_Task(void *);
+void HC_SR04_Task(void *);
 
 HardwareSerial SerialSDM(1);
 SDM15 sdm15(SerialSDM);
@@ -25,6 +26,12 @@ SDM15 sdm15(SerialSDM);
 #if defined(MODE_IR)
 namespace {
     constexpr uint32_t IR_DEDUP_WINDOW_MS = 100;
+}
+#endif
+
+#if defined(MODE_HC_SR04)
+namespace {
+    constexpr float SOUND_SPEED_CM_PER_US = 0.0343f;
 }
 #endif
 
@@ -115,6 +122,52 @@ void IR_Task(void *pvParameters) {
         }
 
         vTaskDelay(pdMS_TO_TICKS(IR_TASK_PERIOD_MS));
+    }
+#else
+    (void)pvParameters;
+    vTaskDelete(NULL);
+#endif
+}
+
+void HC_SR04_Task(void *pvParameters) {
+#if defined(MODE_HC_SR04)
+    (void)pvParameters;
+
+    pinMode(HC_SR04_TRIG, OUTPUT);
+    pinMode(HC_SR04_ECHO, INPUT);
+    digitalWrite(HC_SR04_TRIG, LOW);
+
+    while (1) {
+        // Trigに10usパルスを与えて計測開始
+        digitalWrite(HC_SR04_TRIG, LOW);
+        delayMicroseconds(2);
+        digitalWrite(HC_SR04_TRIG, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(HC_SR04_TRIG, LOW);
+
+        const uint32_t duration_us =
+            pulseIn(HC_SR04_ECHO, HIGH, HC_SR04_TIMEOUT_US);
+
+        if (duration_us == 0) {
+            // タイムアウト時は有効フラグを0にする
+            Tx_16Data[0] = 0;
+            Tx_16Data[1] = 0;
+            Tx_16Data[2] = 0;
+        } else {
+            const float distance_cm =
+                (duration_us * SOUND_SPEED_CM_PER_US) * 0.5f;
+            const int16_t distance_mm = (int16_t)(distance_cm * 10.0f);
+
+            // HC-SR04フォーマット
+            // 0: 有効フラグ(1)
+            // 1: 距離[mm]
+            // 2: エコーパルス幅[us]
+            Tx_16Data[0] = 1;
+            Tx_16Data[1] = distance_mm;
+            Tx_16Data[2] = (int16_t)duration_us;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(HC_SR04_TASK_PERIOD_MS));
     }
 #else
     (void)pvParameters;
