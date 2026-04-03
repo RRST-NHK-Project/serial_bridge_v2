@@ -39,6 +39,8 @@ namespace {
 
 void SDM15_Task(void *pvParameters) {
 
+    (void)pvParameters;
+
     // HardwareSerial.begin() は (baud, config, rxPin, txPin) の順序
     SerialSDM.begin(460800, SERIAL_8N1, SDM15_RX, SDM15_TX);
     SerialSDM.setTimeout(20);
@@ -51,21 +53,23 @@ void SDM15_Task(void *pvParameters) {
     sdm15.StartScan();
 
     while (1) {
+        // 溜まっているフレームを読み切り、最後の有効値だけを反映する
+        bool has_latest = false;
+        ScanData latest_data = {};
 
-        if (SerialSDM.available() >= 9) {
-
+        while (SerialSDM.available() >= 9) {
             ScanData data = sdm15.GetScanData();
-
             if (!data.checksum_error) {
-
-                // 受信データを送信用配列に格納
-                Tx_16Data[0] = int16_t(data.distance);
-                Tx_16Data[1] = int16_t(data.intensity);
-                Tx_16Data[2] = int16_t(data.disturb);
-
-            } else {
-                ; // エラー処理など
+                latest_data = data;
+                has_latest = true;
             }
+        }
+
+        if (has_latest) {
+            // 受信データを送信用配列に格納（常に最新値のみ）
+            Tx_16Data[0] = int16_t(latest_data.distance);
+            Tx_16Data[1] = int16_t(latest_data.intensity);
+            Tx_16Data[2] = int16_t(latest_data.disturb);
         }
 
         vTaskDelay(pdMS_TO_TICKS(CTRL_PERIOD_MS));

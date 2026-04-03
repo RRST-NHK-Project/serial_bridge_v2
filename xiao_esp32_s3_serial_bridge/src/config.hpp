@@ -11,13 +11,13 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // ================= 基本設定 =================
 
 // IDの設定，ROS側からマイコンを識別するために使用，すべてのマイコンで異なる値にすること
-#define DEVICE_ID 0x09
+#define DEVICE_ID 0x12
 
 // モードの設定，どれか一つをコメントアウト解除する
-// #define MODE_SDM15
+#define MODE_SDM15
 // #define MODE_ENC
 // #define MODE_IR
-#define MODE_HC_SR04
+// #define MODE_HC_SR04
 // #define MODE_DEBUG
 
 // ================= 高度な設定（通常は変更不要） =================
