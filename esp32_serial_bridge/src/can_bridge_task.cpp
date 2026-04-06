@@ -1,5 +1,6 @@
 #include "can_bridge_task.hpp"
 #include "defs.hpp"
+#include "frame_data.hpp"
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <driver/twai.h>
@@ -20,7 +21,9 @@ namespace {
     constexpr uint8_t CAN_FRAME_DATA_LEN = 8;
 
     // Serial frame: START + ID + LEN + DATA + CHECKSUM
-    constexpr uint8_t MAX_SERIAL_FRAME = 1 + 1 + 1 + (Rx16NUM * 2) + 1;
+    constexpr uint8_t SERIAL_DATA_WORDS = 24;
+    constexpr uint8_t MAX_SERIAL_DATA_BYTES = SERIAL_DATA_WORDS * 2;
+    constexpr uint8_t MAX_SERIAL_FRAME = 1 + 1 + 1 + MAX_SERIAL_DATA_BYTES + 1;
 
     enum RxState {
         WAIT_START,
@@ -33,7 +36,7 @@ namespace {
     RxState serial_rx_state = WAIT_START;
     uint8_t serial_rx_id = 0;
     uint8_t serial_rx_len = 0;
-    uint8_t serial_rx_buf[Rx16NUM * 2] = {0};
+    uint8_t serial_rx_buf[MAX_SERIAL_DATA_BYTES] = {0};
     uint8_t serial_rx_index = 0;
     uint8_t serial_rx_checksum = 0;
 
@@ -142,7 +145,7 @@ namespace {
                 serial_rx_len = b;
                 serial_rx_checksum ^= b;
 
-                if (serial_rx_len > (Rx16NUM * 2)) {
+                if (serial_rx_len > MAX_SERIAL_DATA_BYTES) {
                     serial_rx_state = WAIT_START;
                 } else {
                     serial_rx_index = 0;
