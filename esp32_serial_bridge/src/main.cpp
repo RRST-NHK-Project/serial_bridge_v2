@@ -10,6 +10,8 @@ Description:
 Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 ====================================================================*/
 
+#include "can_bridge_task.hpp"
+#include "can_node_task.hpp"
 #include "config.hpp"
 #include "defs.hpp"
 #include "pid_task.hpp"
@@ -40,6 +42,16 @@ void setup() {
     // ledcSetup(1, 20000, 8);
     // ledcAttachPin(LED, 1);
 
+#if !defined(MODE_CAN_BRIDGE)
+#if defined(USE_CAN_CLIENT) && USE_CAN_CLIENT
+    xTaskCreate(
+        canNodeTask,
+        "canNodeTask",
+        4096,
+        NULL,
+        10,
+        NULL);
+#else
     xTaskCreate(
         serialTask,   // タスク関数
         "serialTask", // タスク名
@@ -47,9 +59,20 @@ void setup() {
         NULL,
         10, // 優先度
         NULL);
+#endif
+#endif
 
 // モードに応じた初期化
-#if defined(MODE_OUTPUT)
+#if defined(MODE_CAN_BRIDGE)
+    xTaskCreate(
+        canBridgeTask,
+        "canBridgeTask",
+        4096,
+        NULL,
+        12,
+        NULL);
+
+#elif defined(MODE_OUTPUT)
     // 出力モード初期化
     xTaskCreate(
         Output_Task,   // タスク関数
@@ -193,7 +216,7 @@ void setup() {
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
+#if (defined(MODE_CAN_BRIDGE) + defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
      defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_ROBOMAS_PLUS_IO) + defined(MODE_DEBUG)) != 1
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
