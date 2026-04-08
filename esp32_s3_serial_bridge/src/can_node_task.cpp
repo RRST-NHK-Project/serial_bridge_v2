@@ -19,12 +19,7 @@ namespace {
     constexpr uint8_t MAX_DATA_BYTES = ((Rx16NUM > Tx16NUM) ? Rx16NUM : Tx16NUM) * 2;
     constexpr uint8_t MAX_SERIAL_FRAME = 1 + 1 + 1 + MAX_DATA_BYTES + 1;
 
-// 入力モードでは送信周期を短くする
-#if defined(MODE_INPUT) || defined(MODE_ROBOMAS_PLUS_INPUT)
-    constexpr uint32_t TX_PERIOD_MS = 20;
-#else
     constexpr uint32_t TX_PERIOD_MS = 100;
-#endif
 
     struct CanAssembly {
         bool active = false;
@@ -188,10 +183,10 @@ namespace {
                 continue;
             }
             if (rx_msg.data_length_code != CAN_FRAME_DATA_LEN) {
+
+                dbg_rx_frames++;
                 continue;
             }
-
-            dbg_rx_frames++;
 
             const uint8_t seq = rx_msg.data[0];
             const uint8_t total = rx_msg.data[1];
