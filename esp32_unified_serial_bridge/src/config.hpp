@@ -74,6 +74,6 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 
 // ================= 高度な設定（通常は変更不要） =================
 
-// 以下の設定は必要に応じて変更
+// 以下の設定を変更すると正常に動作しない可能性があります。注意してください。
 #define ENABLE_LED 1          // 状態表示LEDを有効にする場合1に設定
 #define ENABLE_EXTRA_TR_PIN 0 // TR6,TR7を有効にする場合1に設定、サーボとのピン競合に注意
