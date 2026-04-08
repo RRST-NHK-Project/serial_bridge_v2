@@ -4,7 +4,7 @@
 
 esp32_unified_serial_bridge is a unified firmware implementation for ESP32 and ESP32-S3 microcontrollers used with the serial_bridge ROS 2 package.
 
-This program runs on an ESP32/ESP32-S3 microcontroller and communicates with a PC-side ROS 2 node via a custom binary serial protocol.
+This program runs on an ESP32 or ESP32-S3 microcontroller and communicates with a PC-side ROS 2 node via a custom binary serial protocol.
 It receives control commands from ROS 2 and outputs them to motors, servos, and GPIOs, while also sending encoder values and sensor data back to ROS 2.
 
 This firmware is designed for real-time robot hardware control and is actively used in the NHK Project, RRST, at Ritsumeikan University.
@@ -24,6 +24,8 @@ UART is not required. Communication is performed via USB serial.
 Build target switching is done with PlatformIO environments:
 - ESP32: `pio run -e esp32dev`
 - ESP32-S3: `pio run -e esp32-s3-devkitc-1`
+
+The same source tree is used for both targets. Board-specific pin mappings are selected in `src/defs.hpp` at build time.
 
 ---
 
@@ -86,6 +88,7 @@ TX (MCU -> PC):
 
 Pin configuration depends on the specific robot hardware.
 All pin definitions are centralized in the source code for easy modification.
+ESP32 and ESP32-S3 use different board mappings, so confirm the selected PlatformIO environment before flashing.
 
 Typical assignments include:
 - Motor PWM outputs
@@ -108,9 +111,11 @@ Ensure the following parameters match on both sides:
 
 ---
 
-## 8. Serial-CAN Bridge Mode (TWAI + MCP2561)
+## 8. Serial-CAN Bridge Mode (Under Development, TWAI + MCP2561)
 
-This repository now supports `MODE_CAN_BRIDGE` for a gateway MCU connected to PC via USB serial.
+CAN-related features in this project are under active development. Interfaces, wiring assumptions, and frame handling details may change as the implementation stabilizes.
+
+This repository now includes an in-development CAN bridge mode for a gateway MCU connected to PC via USB serial.
 
 Use case:
 - 1 bridge ESP32 is connected to PC
@@ -132,7 +137,11 @@ CAN pin definitions are switched by build target in `src/defs.hpp`:
 - ESP32: `CAN_TX = 4`, `CAN_RX = 2`
 - ESP32-S3: `CAN_TX = 3`, `CAN_RX = 2`
 
+This mapping is provisional while CAN support is being validated.
+
 ### 8.2 Bridge Behavior
+
+Status: under development
 
 - Serial input uses existing frame format:
       `[START][DEVICE_ID][LENGTH][DATA...][CHECKSUM]`
@@ -155,6 +164,8 @@ Notes:
 - TWAI speed is set to 1 Mbps
 
 ### 8.4 CAN Client Node (Slave Side)
+
+Status: under development
 
 Node MCU (actuator side) can use CAN as transport while keeping existing control modes.
 
