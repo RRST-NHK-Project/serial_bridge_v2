@@ -1,11 +1,11 @@
 /*====================================================================
 Project: esp32_serial_bridge
-Target board: ESP32 Dev Module
+Target board: ESP32 Dev Module（公式開発ボード）, RRST-ESP32-S3 Rev.1（カスタムボード）
 
 Description:
   ROS 2・マイコン間の通信を行うserial_bridgeパッケージのマイコン側プログラム。
-  PCから送られてくるバイナリデータを受信、デコードしマイコンのGPIO出力に反映させる。
-  config.hppで各種設定をするだけで使用可能です。このファイル(main.cpp)を直接編集しないこと。
+  動作モードを切り替えることで、アクチュエータ制御、センサ入力、両方の入出力、ロボマスモードなど様々な用途に対応可能です。
+  config.hppでモード選択、各種設定をするだけで使用可能です。このファイル(main.cpp)を直接編集しないこと。
 
 Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 ====================================================================*/
