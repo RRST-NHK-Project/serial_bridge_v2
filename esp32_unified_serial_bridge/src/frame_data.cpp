@@ -15,7 +15,7 @@ volatile int16_t Tx_16Data[Tx16NUM] = {0}; // 送信用データ配列
 
 volatile int16_t Rx_16Data[Rx16NUM] = {0}; // 受信用データ配列
 /*
-0: runtimeモード時は動作モード指定（従来モード時はデバッグ用）
+0: デバッグ用
 1~8: MD1~8
 9~16: SERVO1~8
 17~23: TR1~7

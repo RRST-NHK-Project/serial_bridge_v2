@@ -41,7 +41,6 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #include "config.hpp"
 #include "defs.hpp"
 #include "frame_data.hpp"
-#include "runtime_mode.hpp"
 #include <Arduino.h>
 
 #define START_BYTE 0xAA // ROS側と揃える，基本的に変更する必要はない，フレーム破損時の復帰に使用
@@ -76,24 +75,14 @@ uint8_t rx_buf[Rx16NUM * 2];
 uint8_t rx_index = 0;
 uint8_t rx_checksum = 0;
 
-constexpr uint32_t TX_PERIOD_MS_NORMAL = 100; // 通常送信周期（ミリ秒）
-constexpr uint32_t TX_PERIOD_MS_INPUT = 20;   // 入力系モード送信周期（ミリ秒）
+// 入力モードでは送信周期を短くする
+#if defined(MODE_INPUT) || defined(MODE_ROBOMAS_PLUS_INPUT)
+constexpr uint32_t TX_PERIOD_MS = 20; // 送信周期（ミリ秒）
+#else
+constexpr uint32_t TX_PERIOD_MS = 100; // 送信周期（ミリ秒）
+#endif
 
 constexpr uint32_t RX_PERIOD_MS = 10; // 受信周期（ミリ秒）未使用なので削除予定
-
-uint32_t get_tx_period_ms() {
-#if defined(MODE_RUNTIME)
-    const RuntimeMode mode = get_runtime_mode();
-    if (mode == RT_MODE_INPUT || mode == RT_MODE_ROBOMAS_PLUS_INPUT) {
-        return TX_PERIOD_MS_INPUT;
-    }
-    return TX_PERIOD_MS_NORMAL;
-#elif defined(MODE_INPUT) || defined(MODE_ROBOMAS_PLUS_INPUT)
-    return TX_PERIOD_MS_INPUT;
-#else
-    return TX_PERIOD_MS_NORMAL;
-#endif
-}
 
 void send_frame();
 void receive_frame();
@@ -105,13 +94,11 @@ void serialTask(void *) {
     TickType_t last_tx = xTaskGetTickCount();
 
     while (1) {
-        const uint32_t tx_period_ms = get_tx_period_ms();
-
         // RXは毎ループ呼び出す
         receive_frame();
 
         // TXのみ周期管理
-        if (xTaskGetTickCount() - last_tx >= pdMS_TO_TICKS(tx_period_ms)) {
+        if (xTaskGetTickCount() - last_tx >= pdMS_TO_TICKS(TX_PERIOD_MS)) {
             send_frame();
             last_tx = xTaskGetTickCount();
         }
@@ -129,7 +116,7 @@ void txTask(void *) {
 
     while (1) {
         send_frame();
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(get_tx_period_ms()));
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(TX_PERIOD_MS));
     }
 }
 // 受信タスク（削除予定）

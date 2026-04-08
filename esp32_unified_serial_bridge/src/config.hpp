@@ -13,28 +13,26 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // IDの設定，ROS側からマイコンを識別するために使用，すべてのマイコンで異なる値にすること
 #define DEVICE_ID 0x01
 
-// モードの設定（どれか1つだけ有効化）
-// 従来モード（コンパイル時固定）
-#define MODE_OUTPUT
+// モードの設定，どれか一つをコメントアウト解除する
+
+// シリアル通信を使用するモード
+// #define MODE_OUTPUT
 // #define MODE_INPUT
 // #define MODE_IO
 // #define MODE_ROBOMAS
 // #define MODE_ROBOMAS_PLUS_OUTPUT
 // #define MODE_ROBOMAS_PLUS_INPUT
 // #define MODE_ROBOMAS_PLUS_IO
-// #define MODE_DEBUG
 
-// runtimeモード（受信データ Rx_16Data[0] で切替）
-// #define MODE_RUNTIME
-// 0: 停止
-// 1: OUTPUT
-// 2: INPUT
-// 3: IO
-// 4: ROBOMAS
-// 5: ROBOMAS_PLUS_OUTPUT
-// 6: ROBOMAS_PLUS_INPUT
-// 7: ROBOMAS_PLUS_IO
-// 8: DEBUG
+// シリアル通信からCAN通信へのブリッジを行うモード
+#define MODE_CAN_BRIDGE
+
+// ノード側（クライアント側）でCAN経由通信を使う場合に1
+// MODE_CAN_BRIDGE時は自動的に無視される
+#define USE_CAN_CLIENT 0
+
+// デバッグ用
+// #define MODE_DEBUG
 
 // ================= MD関連 =================
 

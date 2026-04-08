@@ -14,17 +14,9 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define DEVICE_ID 0x01
 
 // モードの設定，どれか一つをコメントアウト解除すること
-// #define MODE_IO
+#define MODE_IO
 // #define MODE_ROBOMAS
 // #define MODE_ROBOMAS_AD
-
-// シリアル通信からCAN通信へのブリッジを行うモード
-#define MODE_CAN_BRIDGE
-
-// ノード側（クライアント側）でCAN経由通信を使う場合に1
-// MODE_CAN_BRIDGE時は自動的に無視される
-#define USE_CAN_CLIENT 0
-
 // #define MODE_DEBUG
 
 // ================= MD関連 =================

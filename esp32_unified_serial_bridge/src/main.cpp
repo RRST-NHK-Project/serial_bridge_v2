@@ -1,6 +1,6 @@
 /*====================================================================
-Project: esp32_s3_serial_bridge
-Target board: RRST-ESP32-S3 Rev.1
+Project: esp32_serial_bridge
+Target board: ESP32 Dev Module
 
 Description:
   ROS 2・マイコン間の通信を行うserial_bridgeパッケージのマイコン側プログラム。
@@ -10,6 +10,8 @@ Description:
 Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 ====================================================================*/
 
+#include "can_bridge_task.hpp"
+#include "can_node_task.hpp"
 #include "config.hpp"
 #include "defs.hpp"
 #include "pid_task.hpp"
@@ -30,7 +32,7 @@ void setup() {
     pinMode(LED, OUTPUT);
 
     // ready
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < DEVICE_ID; i++) {
         digitalWrite(LED, HIGH);
         delay(50);
         digitalWrite(LED, LOW);
@@ -40,6 +42,16 @@ void setup() {
     // ledcSetup(1, 20000, 8);
     // ledcAttachPin(LED, 1);
 
+#if !defined(MODE_CAN_BRIDGE)
+#if defined(USE_CAN_CLIENT) && USE_CAN_CLIENT
+    xTaskCreate(
+        canNodeTask,
+        "canNodeTask",
+        4096,
+        NULL,
+        10,
+        NULL);
+#else
     xTaskCreate(
         serialTask,   // タスク関数
         "serialTask", // タスク名
@@ -47,29 +59,40 @@ void setup() {
         NULL,
         10, // 優先度
         NULL);
+#endif
+#endif
 
-    // モードに応じた初期化
-    // #if defined(MODE_OUTPUT)
-    //     // 出力モード初期化
-    //     xTaskCreate(
-    //         Output_Task,   // タスク関数
-    //         "Output_Task", // タスク名
-    //         2048,          // スタックサイズ（words）
-    //         NULL,
-    //         11, // 優先度
-    //         NULL);
+// モードに応じた初期化
+#if defined(MODE_CAN_BRIDGE)
+    xTaskCreate(
+        canBridgeTask,
+        "canBridgeTask",
+        4096,
+        NULL,
+        12,
+        NULL);
 
-    // #elif defined(MODE_INPUT)
-    //     // 入力モード初期化
-    //     xTaskCreate(
-    //         Input_Task,   // タスク関数
-    //         "Input_Task", // タスク名
-    //         1024,         // スタックサイズ（words）
-    //         NULL,
-    //         4, // 優先度
-    //         NULL);
+#elif defined(MODE_OUTPUT)
+    // 出力モード初期化
+    xTaskCreate(
+        Output_Task,   // タスク関数
+        "Output_Task", // タスク名
+        2048,          // スタックサイズ（words）
+        NULL,
+        11, // 優先度
+        NULL);
 
-#if defined(MODE_IO)
+#elif defined(MODE_INPUT)
+    // 入力モード初期化
+    xTaskCreate(
+        Input_Task,   // タスク関数
+        "Input_Task", // タスク名
+        1024,         // スタックサイズ（words）
+        NULL,
+        4, // 優先度
+        NULL);
+
+#elif defined(MODE_IO)
     // 入出力モード初期化
     xTaskCreate(
         IO_Task,   // タスク関数
@@ -100,7 +123,7 @@ void setup() {
         11, // 優先度
         NULL);
 
-#elif defined(MODE_ROBOMAS_AD)
+#elif defined(MODE_ROBOMAS_PLUS_OUTPUT)
     // ロボマスモード初期化
 
     robomas_init();
@@ -113,14 +136,6 @@ void setup() {
         9, // 優先度
         NULL);
 
-    // xTaskCreate(
-    //     PID_Task,   // タスク関数
-    //     "PID_Task", // タスク名
-    //     2048,       // スタックサイズ（words）
-    //     NULL,
-    //     11, // 優先度
-    //     NULL);
-
     // 出力モード初期化
     xTaskCreate(
         Output_Task,   // タスク関数
@@ -128,6 +143,46 @@ void setup() {
         2048,          // スタックサイズ（words）
         NULL,
         8, // 優先度
+        NULL);
+
+#elif defined(MODE_ROBOMAS_PLUS_INPUT)
+
+    robomas_init();
+
+    xTaskCreate(
+        M3508_Task,   // タスク関数
+        "M3508_Task", // タスク名
+        2048,         // スタックサイズ（words）
+        NULL,
+        9, // 優先度
+        NULL);
+
+    xTaskCreate(
+        Input_Task,   // タスク関数
+        "Input_Task", // タスク名
+        1024,         // スタックサイズ（words）
+        NULL,
+        4, // 優先度
+        NULL);
+
+#elif defined(MODE_ROBOMAS_PLUS_IO)
+
+    robomas_init();
+
+    xTaskCreate(
+        M3508_Task,   // タスク関数
+        "M3508_Task", // タスク名
+        2048,         // スタックサイズ（words）
+        NULL,
+        9, // 優先度
+        NULL);
+
+    xTaskCreate(
+        ROBOMAS_IO_Task,   // タスク関数
+        "ROBOMAS_IO_Task", // タスク名
+        2048,              // スタックサイズ（words）
+        NULL,
+        11, // 優先度
         NULL);
 
 #elif defined(MODE_DEBUG)
@@ -161,8 +216,8 @@ void setup() {
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
-     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_AD) + defined(MODE_DEBUG)) != 1
+#if (defined(MODE_CAN_BRIDGE) + defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
+     defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_ROBOMAS_PLUS_IO) + defined(MODE_DEBUG)) != 1
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif
 }

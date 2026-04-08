@@ -21,9 +21,11 @@ namespace {
     constexpr uint8_t CAN_FRAME_DATA_LEN = 8;
 
     // Serial frame: START + ID + LEN + DATA + CHECKSUM
-    constexpr uint8_t SERIAL_DATA_WORDS = 24;
-    constexpr uint8_t MAX_SERIAL_DATA_BYTES = SERIAL_DATA_WORDS * 2;
-    constexpr uint8_t MAX_SERIAL_FRAME = 1 + 1 + 1 + MAX_SERIAL_DATA_BYTES + 1;
+    // Bridge should be transport-agnostic, so keep a wider bound than mode-specific Rx/Tx sizes.
+    // current CAN fragmentation limit: total_chunks <= 32 and payload/chunk == 6 bytes.
+    constexpr uint8_t MAX_CAN_CHUNKS = 32;
+    constexpr uint8_t MAX_SERIAL_FRAME = MAX_CAN_CHUNKS * CAN_PAYLOAD_PER_FRAME;
+    constexpr uint8_t MAX_SERIAL_DATA_BYTES = MAX_SERIAL_FRAME - 4;
 
     enum RxState {
         WAIT_START,
@@ -149,7 +151,7 @@ namespace {
                     serial_rx_state = WAIT_START;
                 } else {
                     serial_rx_index = 0;
-                    serial_rx_state = WAIT_DATA;
+                    serial_rx_state = (serial_rx_len == 0) ? WAIT_CHECKSUM : WAIT_DATA;
                 }
                 break;
 

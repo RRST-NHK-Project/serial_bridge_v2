@@ -26,6 +26,8 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // 状態表示LED
 #define LED 0
 
+#if defined(BOARD_VARIANT_ESP32)
+
 // MD PWM
 #define MD1P 5
 #define MD2P 12
@@ -79,6 +81,65 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 // ロボマス
 #define CAN_RX 2
 #define CAN_TX 4
+
+#elif defined(BOARD_VARIANT_ESP32_S3)
+
+// MD PWM
+#define MD1P 4
+#define MD2P 5
+#define MD3P 6
+#define MD4P 7
+
+// MD DIR
+#define MD1D 8
+#define MD2D 9
+#define MD3D 10
+#define MD4D 11
+
+// サーボ
+#define SERVO1 16
+#define SERVO2 17
+#define SERVO3 18
+#define SERVO4 21
+
+// ソレノイドバルブ
+#define TR1 40
+#define TR2 41
+#define TR3 42
+#define TR4 47
+#define TR5 48
+#define TR6 1
+#define TR7 TR6
+
+// エンコーダ
+#define ENC1_A 12
+#define ENC1_B 13
+#define ENC2_A 14
+#define ENC2_B 15
+// ESP32-S3ハードではENC3/4が未搭載のため、未使用時互換としてENC2へ割り当てる
+#define ENC3_A ENC2_A
+#define ENC3_B ENC2_B
+#define ENC4_A ENC2_A
+#define ENC4_B ENC2_B
+
+// スイッチ
+#define SW1 35
+#define SW2 36
+#define SW3 37
+#define SW4 38
+#define SW5 39
+// ESP32-S3ハードではSW6/7/8が未搭載のため、未使用時互換としてSW5へ割り当てる
+#define SW6 SW5
+#define SW7 SW5
+#define SW8 SW5
+
+// ロボマス
+#define CAN_RX 2
+#define CAN_TX 3
+
+#else
+#error "Unknown board variant. Please build with BOARD_VARIANT_ESP32 or BOARD_VARIANT_ESP32_S3."
+#endif
 
 // MD用
 #define MD_PWM_MAX ((1 << MD_PWM_RESOLUTION) - 1)
