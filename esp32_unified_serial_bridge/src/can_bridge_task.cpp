@@ -127,6 +127,10 @@ namespace {
     }
 
     void pollSerialRxAndBridgeToCan() {
+        if (!Serial) {
+            return;
+        }
+
         while (Serial.available()) {
             const uint8_t b = static_cast<uint8_t>(Serial.read());
 
@@ -182,21 +186,33 @@ namespace {
         can_assembly.last_update_ms = 0;
     }
 
-    void tryFlushCanAssemblyToSerial() {
+    bool tryFlushCanAssemblyToSerial() {
         if (!can_assembly.active || can_assembly.length < 4) {
-            return;
+            return false;
         }
 
         const uint8_t frame_len = static_cast<uint8_t>(1 + 1 + 1 + can_assembly.data[2] + 1);
         if (frame_len > MAX_SERIAL_FRAME || can_assembly.length < frame_len) {
-            return;
+            return false;
+        }
+
+        if (!Serial) {
+            return false;
+        }
+
+        if (Serial.availableForWrite() < frame_len) {
+            return false;
         }
 
         if (verifySerialFrame(can_assembly.data, frame_len)) {
-            Serial.write(can_assembly.data, frame_len);
+            const size_t written = Serial.write(can_assembly.data, frame_len);
+            if (written != frame_len) {
+                return false;
+            }
         }
 
         resetCanAssembly();
+        return true;
     }
 
     void handleCanFragment(uint8_t source_id, const twai_message_t &msg) {
@@ -290,6 +306,10 @@ void canBridgeTask(void *) {
     resetCanAssembly();
 
     while (1) {
+        if (can_assembly.active && can_assembly.next_seq >= can_assembly.total_chunks) {
+            tryFlushCanAssemblyToSerial();
+        }
+
         pollSerialRxAndBridgeToCan();
         pollCanRxAndBridgeToSerial();
         vTaskDelay(pdMS_TO_TICKS(1));
