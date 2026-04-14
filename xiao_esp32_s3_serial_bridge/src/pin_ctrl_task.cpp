@@ -14,7 +14,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #endif
 #include <Arduino.h>
 
-constexpr uint32_t CTRL_PERIOD_MS = 5; // ピン更新周期（ミリ秒）
+constexpr uint32_t CTRL_PERIOD_MS = 1; // ピン更新周期（ミリ秒）
 
 void SDM15_Task(void *);
 void IR_Task(void *);

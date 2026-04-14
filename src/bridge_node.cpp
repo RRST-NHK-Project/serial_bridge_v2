@@ -183,7 +183,7 @@ void SerialBridgeNode::update() {
         rx_buffer_.push_back(buf[i]);
 
     int processed = 0;
-    constexpr int MAX_FRAMES = 1;
+    constexpr int MAX_FRAMES = 64;
 
     while (rx_buffer_.size() >= 4 && processed < MAX_FRAMES) {
         // START 同期
