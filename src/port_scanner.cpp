@@ -14,6 +14,8 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
  * [N+1] CHECKSUM : ID, LENGTH, DATA に対する XOR チェックサム
  * ====================================================================*/
 
+#include "serial_bridge/config.hpp"
+#include "serial_bridge/graphical_ui.hpp"
 #include <cstdint>
 #include <cstring>
 #include <dirent.h>
@@ -22,6 +24,7 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #include <iostream>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string>
 #include <termios.h>
 #include <unistd.h>
@@ -35,6 +38,58 @@ struct Frame {
     std::vector<uint8_t> data;
 };
 
+static inline bool scanner_log_enabled() {
+    return serial_bridge::config::kLogOutputMode ==
+           serial_bridge::config::LogOutputMode::kTerminal;
+}
+
+static inline bool scanner_graphical_enabled() {
+    return serial_bridge::graphical_ui::enabled();
+}
+
+static void scanner_graphical_line(const std::string &state,
+                                   const std::string &port,
+                                   size_t checked,
+                                   size_t total,
+                                   size_t detected,
+                                   size_t skipped_in_use,
+                                   size_t skipped_excluded) {
+    if (!scanner_graphical_enabled())
+        return;
+
+    std::ostringstream oss;
+    oss << state
+        << " checked=" << checked << "/" << total
+        << " detected=" << detected
+        << " in_use_skip=" << skipped_in_use
+        << " excluded_skip=" << skipped_excluded;
+    if (!port.empty()) {
+        oss << " port=" << port;
+    }
+    serial_bridge::graphical_ui::set_scanner_line(oss.str());
+}
+
+static void scanner_graphical_detected_line(const std::map<uint8_t, std::string> &result) {
+    if (!scanner_graphical_enabled())
+        return;
+
+    std::ostringstream oss;
+    oss << "[SCAN] detected_map ";
+    if (result.empty()) {
+        oss << "(none)";
+    } else {
+        bool first = true;
+        for (const auto &[id, port] : result) {
+            if (!first)
+                oss << " | ";
+            first = false;
+            oss << "0x" << std::hex << std::uppercase << static_cast<int>(id)
+                << std::dec << "->" << port;
+        }
+    }
+    serial_bridge::graphical_ui::set_detected_line(oss.str());
+}
+
 //
 // /dev/ttyACMx(Arduino, STM32) または /dev/ttyUSBx(ESP32) を列挙する
 //
@@ -44,7 +99,8 @@ static std::vector<std::string> list_serial_ports() {
     // 探索パターン
     std::vector<std::string> patterns = {"/dev/ttyUSB*", "/dev/ttyACM*"};
     for (const auto &pattern : patterns) {
-        std::cout << "[SCAN] pattern: " << pattern << std::endl;
+        if (scanner_log_enabled())
+            std::cout << "[SCAN] pattern: " << pattern << std::endl;
 
         glob_t g;
         memset(&g, 0, sizeof(g));
@@ -52,11 +108,13 @@ static std::vector<std::string> list_serial_ports() {
 
         if (ret == 0) {
             for (size_t i = 0; i < g.gl_pathc; ++i) {
-                std::cout << "[SCAN] found: " << g.gl_pathv[i] << std::endl;
+                if (scanner_log_enabled())
+                    std::cout << "[SCAN] found: " << g.gl_pathv[i] << std::endl;
                 ports.emplace_back(g.gl_pathv[i]);
             }
         } else {
-            std::cout << "[SCAN] none matched for pattern " << pattern << std::endl;
+            if (scanner_log_enabled())
+                std::cout << "[SCAN] none matched for pattern " << pattern << std::endl;
         }
         globfree(&g);
     }
@@ -98,7 +156,8 @@ static bool read_frame(int fd, Frame &frame, int timeout_ms = 2000) {
                 for (int i = 1; i < idx - 1; i++)
                     checksum ^= buf[i]; // ID+LEN+DATA
                 if (checksum != buf[idx - 1]) {
-                    std::cout << "[ERROR] CHECKSUM mismatch\n";
+                    if (scanner_log_enabled())
+                        std::cout << "[ERROR] CHECKSUM mismatch\n";
                     return false;
                 }
 
@@ -143,43 +202,88 @@ static int open_serial_port(const std::string &port) {
 // skip_ports に含まれるポートはスキャン対象外（既に使用中のポートを避けるため）
 //
 std::map<uint8_t, std::string> detect_serial_devices(const std::set<std::string> &skip_ports,
-                                                       const std::set<std::string> &excluded_ports) {
+                                                     const std::set<std::string> &excluded_ports) {
     std::map<uint8_t, std::string> result;
     auto ports = list_serial_ports();
-    std::cout << "[SCAN] Total ports found: " << ports.size() << std::endl;
+    size_t checked = 0;
+    size_t detected = 0;
+    size_t skipped_in_use = 0;
+    size_t skipped_excluded = 0;
+
+    scanner_graphical_line("list", "", checked, ports.size(), detected,
+                           skipped_in_use, skipped_excluded);
+
+    if (scanner_log_enabled())
+        std::cout << "[SCAN] Total ports found: " << ports.size() << std::endl;
 
     for (auto &p : ports) {
         if (skip_ports.count(p)) {
-            std::cout << "[SCAN] Skipping " << p << " (already in use)" << std::endl;
+            checked++;
+            skipped_in_use++;
+            scanner_graphical_line("skip(in_use)", p, checked, ports.size(), detected,
+                                   skipped_in_use, skipped_excluded);
+            if (scanner_log_enabled())
+                std::cout << "[SCAN] Skipping " << p << " (already in use)" << std::endl;
             continue;
         }
         if (excluded_ports.count(p)) {
-            std::cout << "[SCAN] Skipping " << p << " (excluded by config)" << std::endl;
+            checked++;
+            skipped_excluded++;
+            scanner_graphical_line("skip(excluded)", p, checked, ports.size(), detected,
+                                   skipped_in_use, skipped_excluded);
+            if (scanner_log_enabled())
+                std::cout << "[SCAN] Skipping " << p << " (excluded by config)" << std::endl;
             continue;
         }
 
-        std::cout << "[CHECK] Opening port: " << p << std::endl;
+        scanner_graphical_line("open", p, checked, ports.size(), detected,
+                               skipped_in_use, skipped_excluded);
+        if (scanner_log_enabled())
+            std::cout << "[CHECK] Opening port: " << p << std::endl;
         int fd = open_serial_port(p);
         if (fd < 0) {
-            std::cout << "[NG] Failed to open " << p << std::endl;
+            checked++;
+            scanner_graphical_line("open_failed", p, checked, ports.size(), detected,
+                                   skipped_in_use, skipped_excluded);
+            if (scanner_log_enabled())
+                std::cout << "[NG] Failed to open " << p << std::endl;
             continue;
         }
 
         Frame frame;
+        scanner_graphical_line("read", p, checked, ports.size(), detected,
+                               skipped_in_use, skipped_excluded);
         if (read_frame(fd, frame)) {
             result[frame.id] = p;
-            std::cout << "[OK] Detected ID=" << (int)frame.id << " on " << p << std::endl;
+            detected = result.size();
+            checked++;
+            scanner_graphical_line("detected", p, checked, ports.size(), detected,
+                                   skipped_in_use, skipped_excluded);
+            if (scanner_log_enabled())
+                std::cout << "[OK] Detected ID=" << (int)frame.id << " on " << p << std::endl;
         } else {
-            std::cout << "[NG] No valid frame received from " << p << std::endl;
+            checked++;
+            scanner_graphical_line("no_frame", p, checked, ports.size(), detected,
+                                   skipped_in_use, skipped_excluded);
+            if (scanner_log_enabled())
+                std::cout << "[NG] No valid frame received from " << p << std::endl;
         }
 
         close(fd);
     }
 
     if (result.empty()) {
-        std::cout << "[RESULT] No serial devices detected." << std::endl;
+        if (scanner_log_enabled())
+            std::cout << "[RESULT] No serial devices detected." << std::endl;
     } else {
-        std::cout << "[RESULT] Total detected devices: " << result.size() << std::endl;
+        if (scanner_log_enabled())
+            std::cout << "[RESULT] Total detected devices: " << result.size() << std::endl;
+    }
+
+    if (scanner_graphical_enabled()) {
+        scanner_graphical_line("done", "", checked, ports.size(), result.size(),
+                               skipped_in_use, skipped_excluded);
+        scanner_graphical_detected_line(result);
     }
 
     return result;

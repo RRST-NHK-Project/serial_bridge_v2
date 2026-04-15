@@ -1,5 +1,6 @@
 #include "serial_bridge/bridge_node.hpp"
 #include "serial_bridge/config.hpp"
+#include "serial_bridge/graphical_ui.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int16_multi_array.hpp>
@@ -90,6 +91,7 @@ void SerialBridgeNode::close_port() {
     }
     connected_ = false;
     rx_buffer_.clear();
+    serial_bridge::graphical_ui::erase_node_line(device_id_);
 }
 
 bool SerialBridgeNode::try_open_port() {
@@ -323,20 +325,37 @@ void SerialBridgeNode::maybe_log_status() {
     const auto period_sec = std::chrono::duration<double>(now - last_status_log_time_).count();
     const auto rx_hz = period_sec > 0.0 ? (static_cast<double>(rx_frames_since_status_) / period_sec) : 0.0;
 
-    RCLCPP_INFO(
-        this->get_logger(),
-        "[ID 0x%02X] status connected=%s rx_hz=%.1f rx_frames=%llu rx_bytes=%llu tx_ok=%llu tx_err=%llu chk_err=%llu id_mismatch=%llu dropped_bytes=%llu rx_buffer=%zu",
-        device_id_,
-        connected_.load() ? "true" : "false",
-        rx_hz,
-        static_cast<unsigned long long>(rx_frames_since_status_),
-        static_cast<unsigned long long>(rx_bytes_since_status_),
-        static_cast<unsigned long long>(tx_frames_since_status_),
-        static_cast<unsigned long long>(tx_errors_since_status_),
-        static_cast<unsigned long long>(checksum_errors_since_status_),
-        static_cast<unsigned long long>(id_mismatch_since_status_),
-        static_cast<unsigned long long>(dropped_bytes_since_status_),
-        rx_buffer_.size());
+    if (serial_bridge::graphical_ui::enabled()) {
+        const int width = std::max(8, serial_bridge::config::kGraphRxBarWidth);
+        const int filled = std::clamp(static_cast<int>(rx_hz), 0, width);
+        const std::string bar(static_cast<size_t>(filled), '#');
+        const std::string remain(static_cast<size_t>(width - filled), '.');
+
+        std::ostringstream oss;
+        oss << (connected_.load() ? "[ON ] " : "[OFF] ")
+            << "RX " << rx_hz << "Hz [" << bar << remain << "] "
+            << "TX(" << tx_frames_since_status_ << "/" << tx_errors_since_status_ << ") "
+            << "CHK " << checksum_errors_since_status_ << " "
+            << "IDM " << id_mismatch_since_status_ << " "
+            << "DROP " << dropped_bytes_since_status_ << " "
+            << "BUF " << rx_buffer_.size();
+        serial_bridge::graphical_ui::set_node_line(device_id_, oss.str());
+    } else {
+        RCLCPP_INFO(
+            this->get_logger(),
+            "[ID 0x%02X] status connected=%s rx_hz=%.1f rx_frames=%llu rx_bytes=%llu tx_ok=%llu tx_err=%llu chk_err=%llu id_mismatch=%llu dropped_bytes=%llu rx_buffer=%zu",
+            device_id_,
+            connected_.load() ? "true" : "false",
+            rx_hz,
+            static_cast<unsigned long long>(rx_frames_since_status_),
+            static_cast<unsigned long long>(rx_bytes_since_status_),
+            static_cast<unsigned long long>(tx_frames_since_status_),
+            static_cast<unsigned long long>(tx_errors_since_status_),
+            static_cast<unsigned long long>(checksum_errors_since_status_),
+            static_cast<unsigned long long>(id_mismatch_since_status_),
+            static_cast<unsigned long long>(dropped_bytes_since_status_),
+            rx_buffer_.size());
+    }
 
     rx_frames_since_status_ = 0;
     rx_bytes_since_status_ = 0;

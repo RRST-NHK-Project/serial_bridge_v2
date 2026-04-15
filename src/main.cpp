@@ -1,6 +1,10 @@
 #include "serial_bridge/bridge_node.hpp"
+#include "serial_bridge/config.hpp"
+#include "serial_bridge/graphical_ui.hpp"
 #include "serial_bridge/port_scanner.hpp"
 #include <rclcpp/rclcpp.hpp>
+
+#include <rcutils/logging.h>
 
 #include <atomic>
 #include <map>
@@ -9,6 +13,13 @@
 #include <thread>
 
 int main(int argc, char *argv[]) {
+    if (serial_bridge::config::kLogOutputMode ==
+            serial_bridge::config::LogOutputMode::kNone ||
+        serial_bridge::config::kLogOutputMode ==
+            serial_bridge::config::LogOutputMode::kGraphical) {
+        rcutils_logging_set_default_logger_level(RCUTILS_LOG_SEVERITY_FATAL);
+    }
+
     rclcpp::init(argc, argv);
 
     auto debug_node = std::make_shared<rclcpp::Node>("serial_bridge_status");
@@ -68,8 +79,8 @@ int main(int argc, char *argv[]) {
                                     "New device found: ID=0x%02X port=%s",
                                     id, port.c_str());
                         auto node = std::make_shared<SerialBridgeNode>(id, port,
-                                                                        rx_timeout_sec,
-                                                                        reconnect_interval_sec);
+                                                                       rx_timeout_sec,
+                                                                       reconnect_interval_sec);
                         node_map[id] = node;
                         known_ports.insert(port);
                         executor.add_node(node);
@@ -84,8 +95,8 @@ int main(int argc, char *argv[]) {
                         executor.remove_node(it->second);
                         known_ports.erase(it->second->get_port());
                         auto node = std::make_shared<SerialBridgeNode>(id, port,
-                                                                        rx_timeout_sec,
-                                                                        reconnect_interval_sec);
+                                                                       rx_timeout_sec,
+                                                                       reconnect_interval_sec);
                         it->second = node;
                         known_ports.insert(port);
                         executor.add_node(node);
@@ -104,6 +115,8 @@ int main(int argc, char *argv[]) {
 
     running = false;
     scanner.join();
+
+    serial_bridge::graphical_ui::shutdown();
 
     rclcpp::shutdown();
     return 0;
