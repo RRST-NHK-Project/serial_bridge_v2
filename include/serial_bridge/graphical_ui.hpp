@@ -35,12 +35,67 @@ namespace serial_bridge::graphical_ui {
         return text + std::string(static_cast<size_t>(width - text.size()), ' ');
     }
 
+    inline bool is_utf8_continuation(unsigned char c) {
+        return (c & 0xC0u) == 0x80u;
+    }
+
+    // ANSIエスケープを可視幅に含めず、必要に応じて切り詰め/右側パディングする。
+    inline std::string fit_ansi_text(const std::string &text, int width) {
+        if (width <= 0)
+            return "";
+
+        std::string out;
+        out.reserve(text.size() + 8);
+
+        int visible = 0;
+        size_t i = 0;
+        while (i < text.size()) {
+            // ANSI CSI sequence: ESC [ ... letter
+            if (text[i] == '\033' && i + 1 < text.size() && text[i + 1] == '[') {
+                const size_t start = i;
+                i += 2;
+                while (i < text.size()) {
+                    const unsigned char ch = static_cast<unsigned char>(text[i]);
+                    i++;
+                    if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+                        break;
+                    }
+                }
+                out.append(text, start, i - start);
+                continue;
+            }
+
+            const unsigned char c = static_cast<unsigned char>(text[i]);
+            size_t char_len = 1;
+            if ((c & 0x80u) != 0u) {
+                // UTF-8先頭バイトから連続バイトを取り込む
+                size_t j = i + 1;
+                while (j < text.size() &&
+                       is_utf8_continuation(static_cast<unsigned char>(text[j]))) {
+                    j++;
+                }
+                char_len = j - i;
+            }
+
+            if (visible >= width)
+                break;
+
+            out.append(text, i, char_len);
+            visible++;
+            i += char_len;
+        }
+
+        if (visible < width) {
+            out += std::string(static_cast<size_t>(width - visible), ' ');
+        }
+        return out;
+    }
+
     inline std::string panel_line(const std::string &content,
                                   const char *content_color = kFgText,
                                   const char *border_color = kFgMuted) {
         const int inner_width = kPanelWidth - 4;
-        const bool has_ansi = content.find("\033[") != std::string::npos;
-        const std::string body = has_ansi ? content : pad_or_trim(content, inner_width);
+        const std::string body = fit_ansi_text(content, inner_width);
         return std::string(border_color) + "| " + std::string(content_color) +
                body + std::string(border_color) + " |" + kReset;
     }
