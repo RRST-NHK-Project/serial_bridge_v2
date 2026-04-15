@@ -41,6 +41,9 @@ private:
     bool verbose_packet_log_{false};
     uint64_t rx_frames_since_status_{0};
     uint64_t rx_bytes_since_status_{0};
+    uint64_t tx_bytes_since_status_{0};
+    uint64_t rx_total_bytes_{0};
+    uint64_t tx_total_bytes_{0};
     uint64_t dropped_bytes_since_status_{0};
     uint64_t checksum_errors_since_status_{0};
     uint64_t id_mismatch_since_status_{0};

@@ -15,6 +15,11 @@
 #include <termios.h>
 #include <unistd.h>
 
+namespace {
+    constexpr double kSerialBaudRate = 115200.0;
+    constexpr double kUartBitsPerByte = 10.0;
+}
+
 // EIO/ENODEV/ENXIO はデバイスの物理的な切断を示すエラーコード
 static bool is_disconnect_error(int err) {
     return err == EIO || err == ENODEV || err == ENXIO;
@@ -180,6 +185,7 @@ void SerialBridgeNode::update() {
 
     last_rx_time_ = std::chrono::steady_clock::now();
     rx_bytes_since_status_ += static_cast<uint64_t>(n);
+    rx_total_bytes_ += static_cast<uint64_t>(n);
 
     for (int i = 0; i < n; i++)
         rx_buffer_.push_back(buf[i]);
@@ -311,6 +317,8 @@ void SerialBridgeNode::tx_callback(
         }
     } else {
         tx_frames_since_status_++;
+        tx_bytes_since_status_ += static_cast<uint64_t>(sizeof(frame));
+        tx_total_bytes_ += static_cast<uint64_t>(sizeof(frame));
     }
 
     maybe_log_status();
@@ -324,6 +332,15 @@ void SerialBridgeNode::maybe_log_status() {
 
     const auto period_sec = std::chrono::duration<double>(now - last_status_log_time_).count();
     const auto rx_hz = period_sec > 0.0 ? (static_cast<double>(rx_frames_since_status_) / period_sec) : 0.0;
+    const auto rx_byte_per_sec = period_sec > 0.0
+                                     ? (static_cast<double>(rx_bytes_since_status_) / period_sec)
+                                     : 0.0;
+    const auto tx_byte_per_sec = period_sec > 0.0
+                                     ? (static_cast<double>(tx_bytes_since_status_) / period_sec)
+                                     : 0.0;
+    const auto total_line_util_percent =
+        std::clamp(((rx_byte_per_sec + tx_byte_per_sec) * kUartBitsPerByte / kSerialBaudRate) * 100.0,
+                   0.0, 999.9);
 
     if (serial_bridge::graphical_ui::enabled()) {
         const int width = std::max(8, serial_bridge::config::kGraphRxBarWidth);
@@ -335,6 +352,9 @@ void SerialBridgeNode::maybe_log_status() {
         oss << (connected_.load() ? "[ON ] " : "[OFF] ")
             << "RX " << rx_hz << "Hz [" << bar << remain << "] "
             << "TX(" << tx_frames_since_status_ << "/" << tx_errors_since_status_ << ") "
+            << "BW " << static_cast<int>(rx_byte_per_sec) << "/" << static_cast<int>(tx_byte_per_sec)
+            << "Bps " << static_cast<int>(total_line_util_percent) << "% "
+            << "TOT " << rx_total_bytes_ << "/" << tx_total_bytes_ << "B "
             << "CHK " << checksum_errors_since_status_ << " "
             << "IDM " << id_mismatch_since_status_ << " "
             << "DROP " << dropped_bytes_since_status_ << " "
@@ -355,10 +375,21 @@ void SerialBridgeNode::maybe_log_status() {
             static_cast<unsigned long long>(id_mismatch_since_status_),
             static_cast<unsigned long long>(dropped_bytes_since_status_),
             rx_buffer_.size());
+
+        RCLCPP_INFO(
+            this->get_logger(),
+            "[ID 0x%02X] bandwidth rx=%.1fB/s tx=%.1fB/s util=%.1f%% total(rx/tx)=%llu/%lluB",
+            device_id_,
+            rx_byte_per_sec,
+            tx_byte_per_sec,
+            total_line_util_percent,
+            static_cast<unsigned long long>(rx_total_bytes_),
+            static_cast<unsigned long long>(tx_total_bytes_));
     }
 
     rx_frames_since_status_ = 0;
     rx_bytes_since_status_ = 0;
+    tx_bytes_since_status_ = 0;
     dropped_bytes_since_status_ = 0;
     checksum_errors_since_status_ = 0;
     id_mismatch_since_status_ = 0;
