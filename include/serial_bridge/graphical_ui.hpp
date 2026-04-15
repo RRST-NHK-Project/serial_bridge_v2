@@ -3,6 +3,7 @@
 #include "serial_bridge/config.hpp"
 
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <iomanip>
@@ -22,9 +23,11 @@ namespace serial_bridge::graphical_ui {
     inline constexpr const char *kFgMuted = "\033[38;5;245m";
     inline constexpr const char *kFgTitle = "\033[38;5;45m";
     inline constexpr const char *kFgAccent = "\033[38;5;81m";
-    inline constexpr const char *kFgGood = "\033[38;5;48m";
-    inline constexpr const char *kFgWarn = "\033[38;5;214m";
-    inline constexpr const char *kFgBad = "\033[38;5;203m";
+    inline constexpr const char *kFgGood = "\033[38;5;48m";        // 緑：良好
+    inline constexpr const char *kFgGoodMid = "\033[38;5;120m";    // 緑系：やや良好
+    inline constexpr const char *kFgWarn = "\033[38;5;214m";       // 黄：注意
+    inline constexpr const char *kFgWarnOrange = "\033[38;5;208m"; // オレンジ：警告
+    inline constexpr const char *kFgBad = "\033[38;5;203m";        // 赤：異常
     inline constexpr const char *kFgText = "\033[38;5;252m";
 
     inline std::string pad_or_trim(const std::string &text, int width) {
@@ -103,6 +106,168 @@ namespace serial_bridge::graphical_ui {
     inline std::string panel_border(const char *border_color = kFgMuted) {
         return std::string(border_color) + "+" +
                std::string(static_cast<size_t>(kPanelWidth - 2), '-') + "+" + kReset;
+    }
+
+    inline std::string scanner_row_color(const std::string &line) {
+        if (line.find("detected") != std::string::npos || line.find("done") != std::string::npos)
+            return kFgGood;
+        if (line.find("failed") != std::string::npos || line.find("no_frame") != std::string::npos)
+            return kFgWarn;
+        if (line.find("skip") != std::string::npos)
+            return kFgMuted;
+        return kFgAccent;
+    }
+
+    inline const char *device_row_color(const std::string &line) {
+        // オフライン状態は赤
+        if (line.find("[OFF]") != std::string::npos)
+            return kFgBad;
+
+        // オンライン状態：複合的に色分け
+        if (line.find("[ON ]") != std::string::npos) {
+            double util = 0.0;
+            double rx_hz = 0.0;
+            int chk_err = 0, idm_err = 0, drop_err = 0;
+
+            // 利用率をパース：最後の % の前の数字
+            size_t util_pos = line.rfind('%');
+            if (util_pos != std::string::npos && util_pos >= 2) {
+                std::string util_str;
+                size_t i = util_pos - 1;
+                while (i > 0 && (std::isdigit(line[i]) || line[i] == '.')) {
+                    util_str = line[i] + util_str;
+                    i--;
+                }
+                try {
+                    util = std::stod(util_str);
+                } catch (...) {
+                }
+            }
+
+            // RX Hz をパース：RX の後の数字
+            size_t rx_pos = line.find("RX ");
+            if (rx_pos != std::string::npos) {
+                rx_pos += 3;
+                std::string rx_str;
+                while (rx_pos < line.size() && (std::isdigit(line[rx_pos]) || line[rx_pos] == '.')) {
+                    rx_str += line[rx_pos];
+                    rx_pos++;
+                }
+                try {
+                    rx_hz = std::stod(rx_str);
+                } catch (...) {
+                }
+            }
+
+            // CHK エラーをパース（有効な場合）
+            size_t chk_pos = line.find("CHK ");
+            if (chk_pos != std::string::npos) {
+                chk_pos += 4;
+                std::string chk_str;
+                while (chk_pos < line.size() && std::isdigit(line[chk_pos])) {
+                    chk_str += line[chk_pos];
+                    chk_pos++;
+                }
+                try {
+                    chk_err = std::stoi(chk_str);
+                } catch (...) {
+                }
+            }
+
+            // IDM エラーをパース（有効な場合）
+            size_t idm_pos = line.find("IDM ");
+            if (idm_pos != std::string::npos) {
+                idm_pos += 4;
+                std::string idm_str;
+                while (idm_pos < line.size() && std::isdigit(line[idm_pos])) {
+                    idm_str += line[idm_pos];
+                    idm_pos++;
+                }
+                try {
+                    idm_err = std::stoi(idm_str);
+                } catch (...) {
+                }
+            }
+
+            // DROP エラーをパース（有効な場合）
+            size_t drop_pos = line.find("DROP ");
+            if (drop_pos != std::string::npos) {
+                drop_pos += 5;
+                std::string drop_str;
+                while (drop_pos < line.size() && std::isdigit(line[drop_pos])) {
+                    drop_str += line[drop_pos];
+                    drop_pos++;
+                }
+                try {
+                    drop_err = std::stoi(drop_str);
+                } catch (...) {
+                }
+            }
+
+            const int total_errors = chk_err + idm_err + drop_err;
+
+            // 複合的に色分け
+            // 赤：高負荷 OR エラーが相当ある
+            if (util >= 80.0 || total_errors > 10)
+                return kFgBad;
+
+            // オレンジ：中程度負荷 OR エラーがある
+            if (util >= 50.0 || total_errors > 0)
+                return kFgWarnOrange;
+
+            // 黄：低-中程度負荷 OR RX周波数低い
+            if (util >= 20.0 || rx_hz < 1.0)
+                return kFgWarn;
+
+            // 緑系：低負荷
+            if (util >= 5.0)
+                return kFgGoodMid;
+
+            // 直（很好）：ほぼ無負荷 AND エラーなし
+            return kFgGood;
+        }
+
+        return kFgText;
+    }
+
+    inline std::vector<std::string> wrap_plain_text(const std::string &text, int width) {
+        std::vector<std::string> lines;
+        if (width <= 0) {
+            lines.emplace_back("");
+            return lines;
+        }
+
+        size_t i = 0;
+        while (i < text.size()) {
+            std::string part;
+            int visible = 0;
+            while (i < text.size() && visible < width) {
+                const unsigned char c = static_cast<unsigned char>(text[i]);
+                size_t char_len = 1;
+                if ((c & 0x80u) != 0u) {
+                    size_t j = i + 1;
+                    while (j < text.size() &&
+                           is_utf8_continuation(static_cast<unsigned char>(text[j]))) {
+                        j++;
+                    }
+                    char_len = j - i;
+                }
+
+                part.append(text, i, char_len);
+                i += char_len;
+                visible++;
+            }
+
+            if (visible < width) {
+                part += std::string(static_cast<size_t>(width - visible), ' ');
+            }
+            lines.push_back(part);
+        }
+
+        if (lines.empty()) {
+            lines.emplace_back(std::string(static_cast<size_t>(width), ' '));
+        }
+        return lines;
     }
 
     inline std::string colorize_scanner_line(const std::string &line) {
@@ -211,9 +376,13 @@ namespace serial_bridge::graphical_ui {
         std::cout << panel_line(mode_line.str(), kFgMuted, kFgTitle) << "\n";
         std::cout << panel_border(kFgTitle) << "\n";
         std::cout << panel_line("SCAN", kFgAccent) << "\n";
-        std::cout << panel_line(colorize_scanner_line(g_state.scanner_line), kFgText) << "\n";
+        for (const auto &line : wrap_plain_text(g_state.scanner_line, kPanelWidth - 4)) {
+            std::cout << panel_line(line, scanner_row_color(g_state.scanner_line).c_str()) << "\n";
+        }
         std::cout << panel_line("DETECTED", kFgAccent) << "\n";
-        std::cout << panel_line(std::string(kFgGood) + g_state.detected_line + kReset, kFgText) << "\n";
+        for (const auto &line : wrap_plain_text(g_state.detected_line, kPanelWidth - 4)) {
+            std::cout << panel_line(line, kFgGood) << "\n";
+        }
         std::cout << panel_border() << "\n";
         std::cout << panel_line("DEVICES", kFgAccent) << "\n";
 
@@ -224,16 +393,17 @@ namespace serial_bridge::graphical_ui {
                 const bool is_on = line.find("[ON ]") != std::string::npos;
                 const size_t tick = g_state.node_ticks[id];
                 std::ostringstream row;
-                row << node_anim_icon(is_on, tick)
-                    << "  " << format_device_id(id) << "  " << colorize_device_line(line);
-                std::cout << panel_line(row.str(), kFgText) << "\n";
+                row << spinner_frame(tick)
+                    << "  " << format_device_id(id) << "  " << line;
+                const auto wrapped = wrap_plain_text(row.str(), kPanelWidth - 4);
+                for (const auto &w : wrapped) {
+                    std::cout << panel_line(w, device_row_color(line)) << "\n";
+                }
             }
         }
 
         std::cout << panel_border() << "\n";
-        std::cout << std::string(kFgMuted)
-                  << "tip: set LogOutputMode::kTerminal for classic logs"
-                  << kReset << "\n";
+        std::cout << panel_line("tip: set LogOutputMode::kTerminal for classic logs", kFgMuted) << "\n";
 
         std::cout.flush();
     }

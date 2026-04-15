@@ -349,16 +349,58 @@ void SerialBridgeNode::maybe_log_status() {
         const std::string remain(static_cast<size_t>(width - filled), '.');
 
         std::ostringstream oss;
-        oss << (connected_.load() ? "[ON ] " : "[OFF] ")
-            << "RX " << rx_hz << "Hz [" << bar << remain << "] "
-            << "TX(" << tx_frames_since_status_ << "/" << tx_errors_since_status_ << ") "
-            << "BW " << static_cast<int>(rx_byte_per_sec) << "/" << static_cast<int>(tx_byte_per_sec)
-            << "Bps " << static_cast<int>(total_line_util_percent) << "% "
-            << "TOT " << rx_total_bytes_ << "/" << tx_total_bytes_ << "B "
-            << "CHK " << checksum_errors_since_status_ << " "
-            << "IDM " << id_mismatch_since_status_ << " "
-            << "DROP " << dropped_bytes_since_status_ << " "
-            << "BUF " << rx_buffer_.size();
+
+        // 接続状態（常に表示）
+        if (serial_bridge::config::kShowGraphicalConnStatus) {
+            oss << (connected_.load() ? "[ON ] " : "[OFF] ");
+        }
+
+        // RX Hz と プログレスバー
+        if (serial_bridge::config::kShowGraphicalRxHz) {
+            oss << "RX " << rx_hz << "Hz [" << bar << remain << "] ";
+        }
+
+        // TX フレーム カウント
+        if (serial_bridge::config::kShowGraphicalTx) {
+            oss << "TX(" << tx_frames_since_status_ << "/" << tx_errors_since_status_ << ") ";
+        }
+
+        // 帯域幅
+        if (serial_bridge::config::kShowGraphicalBandwidth) {
+            oss << "BW " << static_cast<int>(rx_byte_per_sec) << "/" << static_cast<int>(tx_byte_per_sec)
+                << "Bps ";
+        }
+
+        // ライン利用率
+        if (serial_bridge::config::kShowGraphicalUtilization) {
+            oss << static_cast<int>(total_line_util_percent) << "% ";
+        }
+
+        // チェックサムエラー
+        if (serial_bridge::config::kShowGraphicalChecksum) {
+            oss << "CHK " << checksum_errors_since_status_ << " ";
+        }
+
+        // IDミスマッチ
+        if (serial_bridge::config::kShowGraphicalIdMismatch) {
+            oss << "IDM " << id_mismatch_since_status_ << " ";
+        }
+
+        // ドロップバイト
+        if (serial_bridge::config::kShowGraphicalDropped) {
+            oss << "DROP " << dropped_bytes_since_status_ << " ";
+        }
+
+        // バッファサイズ
+        if (serial_bridge::config::kShowGraphicalBuffer) {
+            oss << "BUF " << rx_buffer_.size() << " ";
+        }
+
+        // 累積通信量
+        if (serial_bridge::config::kShowGraphicalTotal) {
+            oss << "TOT " << rx_total_bytes_ << "/" << tx_total_bytes_ << "B";
+        }
+
         serial_bridge::graphical_ui::set_node_line(device_id_, oss.str());
     } else {
         RCLCPP_INFO(
@@ -378,13 +420,11 @@ void SerialBridgeNode::maybe_log_status() {
 
         RCLCPP_INFO(
             this->get_logger(),
-            "[ID 0x%02X] bandwidth rx=%.1fB/s tx=%.1fB/s util=%.1f%% total(rx/tx)=%llu/%lluB",
+            "[ID 0x%02X] bandwidth rx=%.1fB/s tx=%.1fB/s util=%.1f%%",
             device_id_,
             rx_byte_per_sec,
             tx_byte_per_sec,
-            total_line_util_percent,
-            static_cast<unsigned long long>(rx_total_bytes_),
-            static_cast<unsigned long long>(tx_total_bytes_));
+            total_line_util_percent);
     }
 
     rx_frames_since_status_ = 0;

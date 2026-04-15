@@ -17,7 +17,7 @@ namespace serial_bridge::config {
     // kNone    : ターミナルに表示しない
     inline constexpr LogOutputMode kLogOutputMode = LogOutputMode::kGraphical;
     inline constexpr int kGraphRxBarWidth = 24;
-    inline constexpr int kGraphicalUiFrameMs = 30;
+    inline constexpr int kGraphicalUiFrameMs = 100;
 
     inline constexpr std::size_t kTx16Num = 24;
     inline constexpr std::size_t kRx16Num = 17;
@@ -31,5 +31,22 @@ namespace serial_bridge::config {
     inline constexpr const char *kParamStatusLogPeriodMs = "status_log_period_ms";
     inline constexpr int64_t kStatusLogPeriodMsDefault = 100;
     inline constexpr int64_t kStatusLogPeriodMsMin = 100;
+
+    // ================================================================
+    // グラフィカル表示の項目選択（デフォルトは1行に収まるように設定）
+    // ================================================================
+    // 基本項目（常に表示）
+    inline constexpr bool kShowGraphicalConnStatus = true;  // [ON/OFF]
+    inline constexpr bool kShowGraphicalRxHz = true;        // RX Xfx.xHz [...]
+    inline constexpr bool kShowGraphicalTx = true;          // TX(a/b)
+    inline constexpr bool kShowGraphicalBandwidth = true;   // BW rx/txBps
+    inline constexpr bool kShowGraphicalUtilization = true; // util%
+
+    // 詳細項目（デフォルトで非表示：1行に収まるようにするため）
+    inline constexpr bool kShowGraphicalChecksum = true;    // CHK
+    inline constexpr bool kShowGraphicalIdMismatch = false; // IDM
+    inline constexpr bool kShowGraphicalDropped = false;    // DROP
+    inline constexpr bool kShowGraphicalBuffer = true;      // BUF
+    inline constexpr bool kShowGraphicalTotal = false;      // TOT
 
 } // namespace serial_bridge::config
