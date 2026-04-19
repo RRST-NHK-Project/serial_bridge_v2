@@ -1,111 +1,79 @@
-# esp32_serial_bridge
+# esp32_s3_serial_bridge
 
 ## 1. Overview
 
-esp32_serial_bridge is a reference firmware implementation for microcontrollers used with the serial_bridge ROS 2 package.
+esp32_s3_serial_bridge is an ESP32-S3 firmware for the serial_bridge ROS 2 package.
+It provides binary serial communication with PC and executes hardware tasks based on the selected mode.
 
-This program runs on an ESP32-based microcontroller and communicates with a PC-side ROS 2 node via a custom binary serial protocol.
-It receives control commands from ROS 2 and outputs them to motors, servos, and GPIOs, while also sending encoder values and sensor data back to ROS 2.
-
-This firmware is designed for real-time robot hardware control and is actively used in the NHK Project, RRST, at Ritsumeikan University.
+This variant targets RRST-ESP32-S3 based boards and focuses on compact actuator/sensor integration.
 
 ---
 
 ## 2. Target Hardware
 
-MCU           : ESP32 series
-Framework     : Arduino / PlatformIO
-Communication : USB Serial (CDC)
-Power         : External or USB
-
-Note:
-UART is not required. Communication is performed via USB serial.
-
----
-
-## 3. Features
-
-- Custom binary serial protocol compatible with serial_bridge
-- Fixed-length int16_t data frame handling
-- Real-time motor and servo control
-- Multi-axis encoder reading
-- Deterministic periodic control loop
-- Designed to be portable to other MCU platforms (STM32, RP2040, etc.)
+| Item | Description |
+|:---|:---|
+| MCU | RRST-ESP32-S3 Rev.1 |
+| Framework | Arduino (PlatformIO) |
+| Transport | USB Serial |
+| Typical use | Integrated I/O and RoboMaster control |
 
 ---
 
-## 4. Firmware Architecture
+## 3. Mode Comparison (Actuators and Sensors)
 
-```
-Serial (USB)
- |
- +-- Frame Parser
- |    +-- START / LENGTH / CHECKSUM validation
- |    +-- int16_t payload decoding
- |
- +-- Control Task
- |    +-- DC motor PWM output
- |    +-- RC servo control
- |    +-- GPIO control
- |
- +-- Feedback Task
-      +-- Encoder value acquisition
-      +-- Sensor reading
-      +-- Serial frame transmission
-```
+Select exactly one mode in src/config.hpp.
 
-## 5. Communication Protocol
-```
-Frame Structure:
+| Mode | Purpose | DC motor | Servo | TR output | RoboMaster motor | ENC | SW | Other sensors |
+|:---|:---|---:|---:|---:|---:|---:|---:|:---|
+| MODE_IO | Integrated local I/O control | 4 | 4 | 6 | 0 | 2 | 5 | - |
+| MODE_ROBOMAS | RoboMaster CAN motor control | 0 | 0 | 0 | 4 | 0 | 0 | - |
+| MODE_ROBOMAS_AD | RoboMaster + additional output task | 4 | 4 | 6 | 4 | 0 | 0 | - |
+| MODE_DEBUG | Development/debug mode | - | - | - | - | - | - | project-specific |
 
-[START][DEVICE_ID][LENGTH][DATA...][CHECKSUM]
+Notes:
+- TR output means transistor/solenoid digital output channels.
+- ENC and SW values are feedback channels sent in TX frame.
 
-START     : Fixed value 0xAA
-DEVICE_ID: Unique MCU identifier
-LENGTH   : Payload length in bytes
-DATA     : int16_t array (little-endian)
-CHECKSUM : XOR of all previous bytes
+---
+
+## 4. Data Layout (int16)
 
 RX (PC -> MCU):
-- Motor target values
-- Servo angles
-- Control flags and parameters
+- 1 to 8: motor command slots
+- 9 to 16: servo command slots
+- 17 to 23: TR output slots
 
 TX (MCU -> PC):
-- Encoder values
-- Sensor data
-- Status or debug values
-```
----
-
-## 6. Pin Assignment
-
-Pin configuration depends on the specific robot hardware.
-All pin definitions are centralized in the source code for easy modification.
-
-Typical assignments include:
-- Motor PWM outputs
-- Servo control pins
-- Quadrature encoder inputs
-- Digital I/O
+- Encoder and switch feedback channels are mode-dependent
 
 ---
 
-## 7. Integration with ROS 2
+## 5. Configuration Workflow
 
-This firmware is designed to work with the PC-side ROS 2 package:
-serial_bridge/
+1. Open src/config.hpp.
+2. Set DEVICE_ID.
+3. Enable exactly one mode macro.
+4. Adjust PWM and servo parameters if required.
+5. Build and flash with PlatformIO.
 
-Ensure the following parameters match on both sides:
+---
+
+## 6. Compatibility with serial_bridge (ROS 2)
+
+This firmware works with the serial_bridge ROS 2 node.
+Ensure the following are consistent across PC and MCU:
+
 - DEVICE_ID
-- TX / RX data length
-- Frame structure and byte order
-- Communication period
+- Payload layout (Rx_16Data and Tx_16Data interpretation)
+- Topic routing on ROS 2 side
+- Control/feedback cycle timing
 
 ---
 
-## 9. Credits
-Developed by NHK Project, RRST, Ritsumeikan University, Japan (2024)
+## 7. Credits
+
+Developed by NHK Project, RRST, Ritsumeikan University, Japan.
 - Official Website: https://www.rrst.jp
 - X (Twitter): https://x.com/RRST_BKC
 
