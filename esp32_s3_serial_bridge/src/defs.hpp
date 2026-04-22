@@ -72,6 +72,10 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define CAN_RX 2
 #define CAN_TX 3
 
+// SDM15
+#define SDM15_TX SDM15_UART_TX_PIN
+#define SDM15_RX SDM15_UART_RX_PIN
+
 // MD用
 #define MD_PWM_MAX ((1 << MD_PWM_RESOLUTION) - 1)
 

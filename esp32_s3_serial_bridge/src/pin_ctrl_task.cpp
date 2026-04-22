@@ -4,6 +4,7 @@
 Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 ====================================================================*/
 
+#include "SDM15.h"
 #include "defs.hpp"
 #include "driver/pcnt.h"
 #include "frame_data.hpp"
@@ -17,6 +18,12 @@ void IO_Servo_Outout();
 void IO_TR_Output();
 void IO_ENC_Input();
 void IO_SW_Input();
+
+void IO_Task(void *);
+void SDM15_Task(void *);
+
+HardwareSerial SerialSDM(1);
+SDM15 sdm15(SerialSDM);
 
 // ================= TASK =================
 
@@ -57,7 +64,7 @@ void IO_MD_Output() {
 }
 
 void IO_Servo_Outout() {
-    
+
     // サーボ1
     int angle1 = Rx_16Data[9];
     angle1 = constrain(angle1, SERVO1_MIN_DEG, SERVO1_MAX_DEG);
@@ -126,4 +133,43 @@ void IO_SW_Input() {
     Tx_16Data[11] = !digitalRead(SW3);
     Tx_16Data[12] = !digitalRead(SW4);
     Tx_16Data[13] = !digitalRead(SW5);
+}
+
+void SDM15_Task(void *pvParameters) {
+
+    (void)pvParameters;
+
+    // HardwareSerial.begin() は (baud, config, rxPin, txPin) の順序
+    SerialSDM.begin(460800, SERIAL_8N1, SDM15_RX, SDM15_TX);
+    SerialSDM.setTimeout(20);
+
+    // 高速通信対策
+    SerialSDM.setRxBufferSize(2048);
+
+    vTaskDelay(pdMS_TO_TICKS(1000)); // 安定待ち
+
+    sdm15.StartScan();
+
+    while (1) {
+        // 溜まっているフレームを読み切り、最後の有効値だけを反映する
+        bool has_latest = false;
+        ScanData latest_data = {};
+
+        while (SerialSDM.available() >= 9) {
+            ScanData data = sdm15.GetScanData();
+            if (!data.checksum_error) {
+                latest_data = data;
+                has_latest = true;
+            }
+        }
+
+        if (has_latest) {
+            // 受信データを送信用配列に格納（常に最新値のみ）
+            Tx_16Data[0] = int16_t(latest_data.distance);
+            Tx_16Data[1] = int16_t(latest_data.intensity);
+            Tx_16Data[2] = int16_t(latest_data.disturb);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(CTRL_PERIOD_MS));
+    }
 }
