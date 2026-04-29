@@ -45,33 +45,18 @@ This package is designed for real-time robot hardware control, such as DC-motors
 ### 4.1 Overview Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ROS 2 Node Graph                         │
-│                                                                  │
-│  Any ROS 2 node                                                  │
-│  ├─ Publish  serial_tx_6  ──────────────────────────────────┐   │
-│  ├─ Publish  serial_tx_7  ─────────────────────────────┐    │   │
-│  ├─ Subscribe serial_rx_6  ◄────────────────────────┐  │    │   │
-│  └─ Subscribe serial_rx_7  ◄───────────────────┐    │  │    │   │
-│                                                 │    │  │    │   │
-│  ┌──────────────────────────────────────────────┼────┼──┼────┼─┐ │
-│  │             serial_bridge node               │    │  │    │ │ │
-│  │                                              │    │  │    │ │ │
-│  │  ┌────────────────┐   spawn on detect        │    │  │    │ │ │
-│  │  │  port_scanner  │──────────────────►bridge_node(ID=6)   │ │ │
-│  │  │ (thread, 5s)   │                  │  rx_pub ──┘  │    │ │ │
-│  │  │                │──────────────────►bridge_node(ID=7)   │ │ │
-│  │  │  scan /dev/tty*│                  │  rx_pub ─────┘    │ │ │
-│  │  │  (excl. list)  │                  │  tx_sub ──────────┘ │ │
-│  │  └────────────────┘                  │  tx_sub ────────────┘ │ │
-│  └──────────────────────────────────────┼──────────────────────┘ │
-│                                         │                        │
-└─────────────────────────────────────────┼────────────────────────┘
-                             Serial (115200 bps)
-          ┌──────────────────┼────────────────────────┐
-          ▼                  ▼                        ▼
-   MCU (ID=6)          MCU (ID=7)               MCU (ID=N)
-  DC-Motor/Servo/TR   Encoder/Switch              ...
+  [Any ROS 2 node]
+       │  serial_tx_[ID]  (Publish)
+       │  serial_rx_[ID]  (Subscribe)
+       │
+  [serial_bridge node]
+    ├─ port_scanner  ─── scans /dev/ttyUSB*, /dev/ttyACM*
+    │                    identifies MCUs by DEVICE_ID
+    │                    spawns a bridge_node on detection
+    │
+    ├─ bridge_node (ID=6)  ── /dev/ttyUSB0 ──► MCU (ID=6)   Motor / Servo / TR
+    ├─ bridge_node (ID=7)  ── /dev/ttyUSB1 ──► MCU (ID=7)   Encoder / Switch
+    └─ bridge_node (ID=N)  ── ...          ──► MCU (ID=N)   ...
 ```
 
 ### 4.2 Internal Component Roles
