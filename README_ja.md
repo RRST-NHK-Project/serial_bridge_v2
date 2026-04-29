@@ -152,6 +152,7 @@ ROS 2 (serial_bridge)                      マイコン
 | トピック | 型 | 説明 |
 |:---|:---|:---|
 | `serial_tx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | マイコンへの制御指令 |
+
 このトピックに他ノードからPublishすることでserial_bridgeがSubscribeを行い、マイコンへ送信します。
 
 ### Publish トピック（マイコン → ROS）
@@ -159,6 +160,7 @@ ROS 2 (serial_bridge)                      マイコン
 | トピック | 型 | 説明 |
 |:---|:---|:---|
 | `serial_rx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | エンコーダ値・センサデータ |
+
 このトピックを他ノードからSubscribeすることでセンサ値を取得・利用することができます。
 
 ---
