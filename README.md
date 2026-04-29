@@ -7,7 +7,7 @@
 `serial_bridge` is a ROS 2 package that provides a bidirectional bridge between ROS 2 nodes and microcontrollers via serial communication.  
 It automatically scans available serial ports, identifies connected microcontrollers by their `DEVICE_ID` embedded in each frame, and manages multiple MCU connections simultaneously.
 
-This package is designed for real-time robot hardware control, such as DC-motors, RC-servos, encoders, and general-purpose I/O, and is actively used in the NHK Project, RRST, at Ritsumeikan University.
+This package enables real-time control of motors, servos, and solenoid valves on the robot, as well as acquisition of sensors such as encoders, microswitches, and distance sensors.
 
 ---
 
@@ -28,19 +28,18 @@ This package is designed for real-time robot hardware control, such as DC-motors
 
 ## 3. Features
 
-- Automatic serial port scanning — no manual port assignment required
-- **Hot-plug support** — MCUs can be connected/disconnected at any time; detected and recovered automatically
-- Multi-MCU support: each MCU is identified by `DEVICE_ID` in the frame, independent of USB port order
-- Dynamic node creation: a `bridge_node` is spawned per MCU at runtime, no restart required
-- Custom binary frame protocol with `int16` data arrays (24 TX / 17 RX slots)
-- XOR checksum-based frame validation
-- Automatic reconnection on disconnect or RX timeout (`reconnect_interval_sec`, `rx_timeout_sec`)
-- Three log output modes: terminal text, graphical ASCII bar, or silent
-- ESP32-based MCU firmware included (PlatformIO)
+- Automatic serial port scanning — no manual port assignment required.
+- Hot-plug support via dynamic node creation: MCUs can be connected or disconnected at any time and are automatically detected and recovered.
+- Multi-MCU support: each MCU is identified by `DEVICE_ID` in the frame, independent of USB port order.
+- Custom binary frame protocol with `int16` data arrays (24 TX / 17 RX slots).
+- XOR checksum-based frame validation ensures communication reliability.
+- Automatic reconnection on disconnect or RX timeout.
+- Three log output modes: terminal text, graphical bar, or silent. Default is graphical mode.
+- ESP32-based MCU firmware included (PlatformIO) — just set the ID and mode, flash, and it works.
 
 ---
 
-## 4. System Architecture
+## 4. System Configuration
 
 ### 4.1 Overview Diagram
 
@@ -59,7 +58,7 @@ This package is designed for real-time robot hardware control, such as DC-motors
     └─ bridge_node (ID=N)  ── ...          ──► MCU (ID=N)   ...
 ```
 
-### 4.2 Internal Component Roles
+### 4.2 File Roles
 
 | Component | Role |
 |:---|:---|
@@ -83,8 +82,32 @@ This package is designed for real-time robot hardware control, such as DC-motors
                             └─► if found on a different port: node replaced
 ```
 
-> **Key property**: MCU identity is determined by `DEVICE_ID` in the frame, not by USB port number.  
+> **Tips**: MCU identity is determined by `DEVICE_ID` in the frame, not by USB port number.  
 > Plugging into a different USB port is handled transparently — the same `serial_rx_[ID]` / `serial_tx_[ID]` topics remain valid.
+
+### 4.4 Communication Flow (bidirectional)
+
+```
+ROS 2 (serial_bridge)                      MCU
+
+  serial_tx_[ID] received
+       │
+       ▼
+  TX frame assembled
+  [0xAA][ID][LEN][DATA...][CHK]
+       │
+       └─────────────────────────────────► received via serial
+                                           └─ commands applied to motor/servo
+
+                                           feedback sent
+                                           [0xAA][ID][LEN][DATA...][CHK]
+       ◄─────────────────────────────────┘
+  RX frame received
+       │
+       ├─ START_BYTE sync
+       ├─ CHECKSUM validation
+       └─► published as serial_rx_[ID]
+```
 
 ---
 
@@ -92,7 +115,7 @@ This package is designed for real-time robot hardware control, such as DC-motors
 
 ```
 [0]     START_BYTE  : 0xAA
-[1]     DEVICE_ID   : unique ID per MCU (uint8)
+[1]     DEVICE_ID   : unique ID configured per MCU (uint8)
 [2]     LENGTH      : payload length in bytes (= num_int16 × 2)
 [3..N]  DATA        : int16 array, big-endian (high byte first)
 [N+1]   CHECKSUM    : XOR of bytes [1]..[N]
@@ -130,11 +153,15 @@ This package is designed for real-time robot hardware control, such as DC-motors
 |:---|:---|:---|
 | `serial_tx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Control commands sent to the MCU |
 
+Publish to this topic from any ROS 2 node to have serial_bridge forward the commands to the MCU.
+
 ### Published Topics (MCU → ROS)
 
 | Topic | Type | Description |
 |:---|:---|:---|
 | `serial_rx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Encoder values, sensor data from the MCU |
+
+Subscribe to this topic from any ROS 2 node to receive and use sensor feedback.
 
 ---
 
@@ -185,7 +212,7 @@ Configured at compile time in `include/serial_bridge/config.hpp`:
 | Mode | Description |
 |:---|:---|
 | `kTerminal` | Standard ROS 2 logger output |
-| `kGraphical` | ASCII bar graph per MCU (RX rate, bandwidth, utilization) |
+| `kGraphical` | Bar graph per MCU (RX rate, bandwidth, utilization) |
 | `kNone` | Silent — no terminal output |
 
 ---
