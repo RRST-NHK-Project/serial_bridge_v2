@@ -1,0 +1,250 @@
+# **serial_bridge**
+
+> English version: [README.md](README.md)
+
+## 1. 概要
+
+`serial_bridge` は、ROS 2 ノードとマイコン間のシリアル通信を双方向にブリッジする ROS 2 パッケージです。  
+利用可能なシリアルポートを自動スキャンし、各フレームに埋め込まれた `DEVICE_ID` によってマイコンを識別します。複数のマイコンを同時に管理でき、手動でのポート指定は不要です。
+
+立命館大学 RRST NHK プロジェクトにおいて、DC モータ・RC サーボ・エンコーダ・汎用 I/O のリアルタイム制御に使用されています。
+
+---
+
+## 2. システム要件
+
+| 項目 | 内容 |
+|:---|:---|
+| OS | Ubuntu 24.04 LTS |
+| ROS | ROS 2 Jazzy |
+| ボーレート | 115200 bps |
+| ハードウェア | USB または UART で PC に接続されたマイコン |
+
+> **注意**:  
+> `/dev/ttyUSB*` や `/dev/ttyACM*` を使用するには `dialout` グループへの追加が必要です。  
+> `sudo usermod -aG dialout $USER`（反映には再ログインが必要）
+
+---
+
+## 3. 機能一覧
+
+- シリアルポートの自動スキャン — ポートの手動指定が不要
+- **ホットプラグ対応** — 起動中にマイコンを抜き挿ししても自動検出・自動復帰
+- マルチ MCU 対応: フレーム内の `DEVICE_ID` で識別するため USB ポート番号に依存しない
+- 動的ノード生成: 新規デバイス検出時に `bridge_node` をランタイムで生成（再起動不要）
+- int16 配列によるカスタムバイナリフレームプロトコル（TX 24スロット / RX 17スロット）
+- XOR チェックサムによるフレーム検証
+- 切断・RX タイムアウト時の自動再接続（`reconnect_interval_sec`、`rx_timeout_sec`）
+- 3 種類のログ出力モード: テキスト表示 / グラフィカル ASCII バー / サイレント
+- ESP32 系マイコン向けファームウェアを同梱（PlatformIO）
+
+---
+
+## 4. システムアーキテクチャ
+
+### 4.1 全体構成図
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     ROS 2 ノードグラフ                             │
+│                                                                  │
+│  任意の ROS 2 ノード                                               │
+│  ├─ Publish  serial_tx_6  ──────────────────────────────────┐   │
+│  ├─ Publish  serial_tx_7  ──────────────────────────────┐    │   │
+│  ├─ Subscribe serial_rx_6  ◄────────────────────────┐  │    │   │
+│  └─ Subscribe serial_rx_7  ◄────────────────────┐    │  │    │   │
+│                                                 │    │  │    │   │
+│  ┌──────────────────────────────────────────────┼────┼──┼────┼─┐ │
+│  │             serial_bridge ノード              │    │  │    │ │ │
+│  │                                              │    │  │    │ │ │
+│  │  ┌────────────────┐   新規検出時に生成         │    │  │    │ │ │
+│  │  │  port_scanner  ├──────────────────►bridge_node(ID=6)   │ │ │
+│  │  │ (スレッド, 5s)  │                  │  rx_pub ───┘  │    │ │ │
+│  │  │                ├──────────────────►bridge_node(ID=7)   │ │ │
+│  │  │ /dev/tty* 探索  │                  │  rx_pub ──────┘    │ │ │
+│  │  │ (除外リスト適用) │                  │  tx_sub ───────────┘ │ │
+│  │  └────────────────┘                  │  tx_sub ─────────────┘ │
+│  └──────────────────────────────────────┼─────────────────────────┘
+│                                         │                        │
+└─────────────────────────────────────────┼────────────────────────┘
+                              シリアル通信 (115200 bps)
+          ┌──────────────────┼──────────────────────────┐
+          ▼                  ▼                          ▼
+   マイコン (ID=6)     マイコン (ID=7)              マイコン (ID=N)
+  DC モータ/サーボ/TR   エンコーダ/スイッチ              ...
+```
+
+### 4.2 内部コンポーネントの役割
+
+| コンポーネント | 役割 |
+|:---|:---|
+| `main.cpp` | ROS エグゼキュータの初期化、パラメータ読み込み、スキャナスレッドの起動 |
+| `port_scanner` | 全 `/dev/ttyUSB*`・`/dev/ttyACM*` ポートを探索（除外リスト適用）し、プローブフレームを送受信して `DEVICE_ID → ポート名` のマップを返す |
+| `bridge_node` | MCU 1台につき 1 インスタンス。5ms タイマーでシリアル RX を読み取り `serial_rx_[ID]` を Publish。`serial_tx_[ID]` を Subscribe してシリアル TX に書き込む |
+
+### 4.3 ホットプラグ・自動再接続の流れ
+
+```
+【マイコン接続時】
+    └─► port_scanner が /dev/ttyUSBx で有効なフレームを検出
+            └─► SerialBridgeNode を生成し executor に追加
+                    └─► serial_rx_[ID] / serial_tx_[ID] トピックが有効化
+
+【マイコン切断 / RX タイムアウト時】
+    └─► bridge_node が EIO / ENODEV / ENXIO エラー or rx_timeout_sec を検出
+            └─► ポートをクローズ（connected_ = false）
+                    └─► reconnect_interval_sec ごとに再オープンを試みる
+                    └─► 次のスキャンサイクルで port_scanner も再検出
+                            └─► 別ポートで見つかった場合はノードを差し替え
+```
+
+> **重要**: マイコンの識別はフレーム内の `DEVICE_ID` で行われ、USB ポート番号には依存しません。  
+> 別の USB ポートに差し直しても同じ `serial_rx_[ID]` / `serial_tx_[ID]` トピックで通信できます。
+
+### 4.4 フレーム交換シーケンス
+
+```
+ROS 2 (serial_bridge)                      マイコン
+
+  serial_tx_[ID] 受信
+       │
+       ▼
+  TX フレーム組み立て
+  [0xAA][ID][LEN][DATA...][CHK]
+       │
+       └─────────────────────────────────► シリアル受信
+                                           └─ 指令値をモータ/サーボに適用
+
+                                           フィードバック送信
+                                           [0xAA][ID][LEN][DATA...][CHK]
+       ◄─────────────────────────────────┘
+  RX フレーム受信
+       │
+       ├─ START_BYTE 同期
+       ├─ CHECKSUM 検証
+       └─► serial_rx_[ID] として Publish
+```
+
+---
+
+## 5. フレームフォーマット
+
+```
+[0]     START_BYTE  : 0xAA
+[1]     DEVICE_ID   : マイコンごとのユニーク ID（uint8）
+[2]     LENGTH      : ペイロードのバイト数（= int16 個数 × 2）
+[3..N]  DATA        : int16 配列、ビッグエンディアン（上位バイト先行）
+[N+1]   CHECKSUM    : バイト [1]〜[N] の XOR
+```
+
+### デフォルトデータスロット数（`config.hpp` で変更可能）
+
+| 方向 | スロット数 | バイト数 |
+|:---|---:|---:|
+| PC → マイコン（TX） | 24 × int16 | 48 |
+| マイコン → PC（RX） | 17 × int16 | 34 |
+
+### TX スロットの標準割り当て（esp32_serial_bridge）
+
+| スロット | 用途 |
+|---:|:---|
+| 1〜8 | DC モータ指令値 |
+| 9〜16 | RC サーボ指令値 |
+| 17〜23 | TR（トランジスタ/ソレノイド）出力 |
+
+### RX スロットの標準割り当て
+
+| スロット | 用途 |
+|---:|:---|
+| 1〜8 | エンコーダ値 |
+| 9〜16 | スイッチ / センサ入力 |
+
+---
+
+## 6. ROS 2 インターフェース
+
+### Subscribe トピック（ROS → マイコン）
+
+| トピック | 型 | 説明 |
+|:---|:---|:---|
+| `serial_tx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | マイコンへの制御指令 |
+
+### Publish トピック（マイコン → ROS）
+
+| トピック | 型 | 説明 |
+|:---|:---|:---|
+| `serial_rx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | エンコーダ値・センサデータ |
+
+---
+
+## 7. パラメータ（`config/serial_bridge.yaml`）
+
+| パラメータ | デフォルト | 説明 |
+|:---|:---|:---|
+| `excluded_ports` | `["/dev/ttyUSB0"]` | スキャン対象から除外するポート（例: LiDAR、GPS） |
+| `rx_timeout_sec` | `2.0` | この秒数 RX がなければポートを閉じる |
+| `reconnect_interval_sec` | `3.0` | 切断後の再接続までの最小待機時間（秒） |
+| `scan_interval_ms` | `5000` | ポートスキャンの間隔（ミリ秒） |
+
+ビルドし直さずに `config/serial_bridge.yaml` を編集するだけで変更が反映されます。
+
+---
+
+## 8. 使い方
+
+### 8.1 クローン
+
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/RRST-NHK-Project/serial_bridge.git
+```
+
+### 8.2 ビルド
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select serial_bridge
+source install/setup.bash
+```
+
+### 8.3 起動
+
+```bash
+ros2 launch serial_bridge serial_bridge.launch.py
+```
+
+ノード起動後すぐにポートのスキャンが始まり、マイコンが検出されるとログに表示されます。
+
+---
+
+## 9. ログ出力モード
+
+`include/serial_bridge/config.hpp` でコンパイル時に設定します。
+
+| モード | 説明 |
+|:---|:---|
+| `kTerminal` | 標準 ROS 2 ロガー出力 |
+| `kGraphical` | マイコンごとの ASCII バーグラフ（RX レート・帯域・使用率） |
+| `kNone` | サイレント — ターミナル出力なし |
+
+---
+
+## 10. ディレクトリ構成
+
+| パス | 説明 |
+|:---|:---|
+| `src/` | ROS 2 ノードソース（`bridge_node`、`port_scanner`、`main`） |
+| `include/serial_bridge/` | ヘッダファイル（`config.hpp`、`bridge_node.hpp`、`port_scanner.hpp`、`graphical_ui.hpp`） |
+| `config/` | ROS 2 パラメータファイル（`serial_bridge.yaml`） |
+| `launch/` | ランチファイル（`serial_bridge.launch.py`） |
+| `esp32_serial_bridge/` | マイコン向けファームウェア（PlatformIO） |
+
+---
+
+## 11. クレジット
+
+立命館大学 RRST NHK プロジェクト（2024–2026）
+- 公式 Web サイト: https://www.rrst.jp
+- X (Twitter): https://x.com/RRST_BKC
+
+![Logo](https://www.rrst.jp/img/logo.png)

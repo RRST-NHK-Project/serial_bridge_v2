@@ -1,11 +1,13 @@
 # **serial_bridge**
 
+> 日本語版: [README_ja.md](README_ja.md)
+
 ## 1. Overview
 
 `serial_bridge` is a ROS 2 package that provides a bidirectional bridge between ROS 2 nodes and microcontrollers via serial communication.  
-It converts ROS 2 messages into custom binary serial frames and parses received frames back into ROS 2 messages.
+It automatically scans available serial ports, identifies connected microcontrollers by their `DEVICE_ID` embedded in each frame, and manages multiple MCU connections simultaneously.
 
-This package is designed for real-time robot hardware control, such as dc-motors, rc-servo, encoders, and general-purpose I/O, and is actively used in the NHK Project, RRST, at Ritsumeikan University.
+This package is designed for real-time robot hardware control, such as DC-motors, RC-servos, encoders, and general-purpose I/O, and is actively used in the NHK Project, RRST, at Ritsumeikan University.
 
 ---
 
@@ -15,131 +17,209 @@ This package is designed for real-time robot hardware control, such as dc-motors
 |:---|:---|
 | OS | Ubuntu 24.04 LTS |
 | ROS | ROS 2 Jazzy |
+| Baud Rate | 115200 bps |
 | Hardware | PC connected to MCU via USB or UART |
 
 > **Note**:  
-> Stable communication requires proper serial permissions.  
-> Ensure the user belongs to the `dialout` group when using `/dev/ttyUSB*` or `/dev/ttyACM*`.
+> Ensure the user belongs to the `dialout` group for `/dev/ttyUSB*` or `/dev/ttyACM*` access.  
+> `sudo usermod -aG dialout $USER` (re-login required)
 
 ---
 
 ## 3. Features
 
-- ROS 2 <-> Microcontroller serial communication
-- Custom binary frame protocol using `int16` data arrays
-- Low-latency, lightweight message transfer
-- Checksum-based frame validation
-- ESP-based microcontroller implementation provided
-- Protocol and architecture designed to be portable across MCU platforms
+- Automatic serial port scanning — no manual port assignment required
+- **Hot-plug support** — MCUs can be connected/disconnected at any time; detected and recovered automatically
+- Multi-MCU support: each MCU is identified by `DEVICE_ID` in the frame, independent of USB port order
+- Dynamic node creation: a `bridge_node` is spawned per MCU at runtime, no restart required
+- Custom binary frame protocol with `int16` data arrays (24 TX / 17 RX slots)
+- XOR checksum-based frame validation
+- Automatic reconnection on disconnect or RX timeout (`reconnect_interval_sec`, `rx_timeout_sec`)
+- Three log output modes: terminal text, graphical ASCII bar, or silent
+- ESP32-based MCU firmware included (PlatformIO)
 
 ---
 
-## 4. Communication Architecture
+## 4. System Architecture
+
+### 4.1 Overview Diagram
 
 ```
-ROS 2 Node (serial_bridge)
- ├─ Subscribe: std_msgs/msg/Int16MultiArray
- ├─ Publish  : std_msgs/msg/Int16MultiArray
- │
- └─ Serial Port (/dev/ttyUSB*, /dev/ttyACM*)
-        │
-        └─ Microcontroller
-            ├─ DC-Motor control
-            ├─ RC-Servo control
-            ├─ Encoder reading
-            └─ General-purpose I/O
+┌─────────────────────────────────────────────────────────────────┐
+│                        ROS 2 Node Graph                         │
+│                                                                  │
+│  Any ROS 2 node                                                  │
+│  ├─ Publish  serial_tx_6  ──────────────────────────────────┐   │
+│  ├─ Publish  serial_tx_7  ─────────────────────────────┐    │   │
+│  ├─ Subscribe serial_rx_6  ◄────────────────────────┐  │    │   │
+│  └─ Subscribe serial_rx_7  ◄───────────────────┐    │  │    │   │
+│                                                 │    │  │    │   │
+│  ┌──────────────────────────────────────────────┼────┼──┼────┼─┐ │
+│  │             serial_bridge node               │    │  │    │ │ │
+│  │                                              │    │  │    │ │ │
+│  │  ┌────────────────┐   spawn on detect        │    │  │    │ │ │
+│  │  │  port_scanner  │──────────────────►bridge_node(ID=6)   │ │ │
+│  │  │ (thread, 5s)   │                  │  rx_pub ──┘  │    │ │ │
+│  │  │                │──────────────────►bridge_node(ID=7)   │ │ │
+│  │  │  scan /dev/tty*│                  │  rx_pub ─────┘    │ │ │
+│  │  │  (excl. list)  │                  │  tx_sub ──────────┘ │ │
+│  │  └────────────────┘                  │  tx_sub ────────────┘ │ │
+│  └──────────────────────────────────────┼──────────────────────┘ │
+│                                         │                        │
+└─────────────────────────────────────────┼────────────────────────┘
+                             Serial (115200 bps)
+          ┌──────────────────┼────────────────────────┐
+          ▼                  ▼                        ▼
+   MCU (ID=6)          MCU (ID=7)               MCU (ID=N)
+  DC-Motor/Servo/TR   Encoder/Switch              ...
 ```
+
+### 4.2 Internal Component Roles
+
+| Component | Role |
+|:---|:---|
+| `main.cpp` | Initializes the ROS executor, reads parameters, starts the scanner thread |
+| `port_scanner` | Probes all `/dev/ttyUSB*` and `/dev/ttyACM*` ports (excluding the list), sends a probe frame, and returns a map of `DEVICE_ID → port` |
+| `bridge_node` | One instance per MCU — runs a 5 ms timer, reads serial RX, publishes `serial_rx_[ID]`; receives `serial_tx_[ID]` and writes to the serial port |
+
+### 4.3 Hot-Plug and Reconnection Flow
+
+```
+[MCU plugged in]
+    └─► port_scanner detects valid frame on /dev/ttyUSBx
+            └─► SerialBridgeNode created and added to executor
+                    └─► serial_rx_[ID] / serial_tx_[ID] topics become active
+
+[MCU unplugged / RX timeout]
+    └─► bridge_node detects EIO / ENODEV / ENXIO, or rx_timeout_sec elapsed
+            └─► port closed, connected_ = false
+                    └─► bridge_node retries open every reconnect_interval_sec
+                    └─► port_scanner also re-detects on next scan cycle
+                            └─► if found on a different port: node replaced
+```
+
+> **Key property**: MCU identity is determined by `DEVICE_ID` in the frame, not by USB port number.  
+> Plugging into a different USB port is handled transparently — the same `serial_rx_[ID]` / `serial_tx_[ID]` topics remain valid.
 
 ---
 
 ## 5. Frame Format
 
-### 5.1 PC → Microcontroller (TX)
-
 ```
-[0] START_BYTE   : 0xAA
-[1] DEVICE_ID
-[2] LENGTH       : Payload length (bytes)
-[3] DATA[0]
-...
-[n] DATA[n]
-[n+1] CHECKSUM
+[0]     START_BYTE  : 0xAA
+[1]     DEVICE_ID   : unique ID per MCU (uint8)
+[2]     LENGTH      : payload length in bytes (= num_int16 × 2)
+[3..N]  DATA        : int16 array, big-endian (high byte first)
+[N+1]   CHECKSUM    : XOR of bytes [1]..[N]
 ```
 
-- `DATA` is an array of `int16_t`
-- `DEVICE_ID` is a unique identifier assigned to each microcontroller
-- `CHECKSUM` is calculated using XOR of all previous bytes
+### Default data slot count (configurable in `config.hpp`)
 
----
+| Direction | Slots | Bytes |
+|:---|---:|---:|
+| PC → MCU (TX) | 24 × int16 | 48 |
+| MCU → PC (RX) | 17 × int16 | 34 |
 
-### 5.2 Microcontroller → PC (RX)
+### Typical TX slot usage (esp32_serial_bridge)
 
-- Same structure as TX
-- Typically used for encoder values, sensor data, and status feedback
+| Slot | Usage |
+|---:|:---|
+| 1–8 | DC motor commands |
+| 9–16 | RC servo commands |
+| 17–23 | TR (transistor/solenoid) outputs |
+
+### Typical RX slot usage
+
+| Slot | Usage |
+|---:|:---|
+| 1–8 | Encoder values |
+| 9–16 | Switch / sensor inputs |
 
 ---
 
 ## 6. ROS 2 Interfaces
 
-### 6.1 Subscribed Topics (ROS → MCU)
+### Subscribed Topics (ROS → MCU)
 
 | Topic | Type | Description |
 |:---|:---|:---|
-| `/serial_tx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Control commands and parameters |
+| `serial_tx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Control commands sent to the MCU |
 
----
-
-### 6.2 Published Topics (MCU → ROS)
+### Published Topics (MCU → ROS)
 
 | Topic | Type | Description |
 |:---|:---|:---|
-| `/serial_rx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Encoder values, sensor data, debug information |
+| `serial_rx_[DEVICE_ID]` | `std_msgs/msg/Int16MultiArray` | Encoder values, sensor data from the MCU |
 
 ---
 
-## 7. Getting Started
+## 7. Parameters (`config/serial_bridge.yaml`)
 
-### 7.1 Clone the Repository
+| Parameter | Default | Description |
+|:---|:---|:---|
+| `excluded_ports` | `["/dev/ttyUSB0"]` | Ports excluded from scanning (e.g. LiDAR, GPS) |
+| `rx_timeout_sec` | `2.0` | Seconds without RX before closing the port |
+| `reconnect_interval_sec` | `3.0` | Minimum wait between reconnect attempts |
+| `scan_interval_ms` | `5000` | Interval between port scan cycles (ms) |
 
-```
+Edit `config/serial_bridge.yaml` to change these values without rebuilding.
+
+---
+
+## 8. Getting Started
+
+### 8.1 Clone
+
+```bash
 cd ~/ros2_ws/src
 git clone https://github.com/RRST-NHK-Project/serial_bridge.git
 ```
 
----
+### 8.2 Build
 
-### 7.2 Build
-
-```
+```bash
 cd ~/ros2_ws
 colcon build --packages-select serial_bridge
 source install/setup.bash
 ```
 
----
+### 8.3 Launch
 
-### 7.3 Run
-
-```
-ros2 run serial_bridge serial_bridge_node
+```bash
+ros2 launch serial_bridge serial_bridge.launch.py
 ```
 
-Serial port settings such as device name and baud rate are configured in the source code or via ROS 2 parameters, depending on the implementation.
+The node starts scanning ports immediately. Connected MCUs appear in the log as they are detected.
 
 ---
 
-## 8. Directory Structure
+## 9. Log Output Modes
+
+Configured at compile time in `include/serial_bridge/config.hpp`:
+
+| Mode | Description |
+|:---|:---|
+| `kTerminal` | Standard ROS 2 logger output |
+| `kGraphical` | ASCII bar graph per MCU (RX rate, bandwidth, utilization) |
+| `kNone` | Silent — no terminal output |
+
+---
+
+## 10. Directory Structure
 
 | Path | Description |
 |:---|:---|
-| `/esp32_serial_bridge` | Reference implementation for ESP32-based microcontrollers (PlatformIO project) |
-| `/src` | Source code for the ROS 2 node |
+| `src/` | ROS 2 node source (`bridge_node`, `port_scanner`, `main`) |
+| `include/serial_bridge/` | Headers (`config.hpp`, `bridge_node.hpp`, `port_scanner.hpp`, `graphical_ui.hpp`) |
+| `config/` | ROS 2 parameter file (`serial_bridge.yaml`) |
+| `launch/` | Launch file (`serial_bridge.launch.py`) |
+| `esp32_serial_bridge/` | MCU firmware (PlatformIO) |
 
 ---
 
+## 11. Credits
 
-## 10. Credits
-Developed by NHK Project, RRST, Ritsumeikan University, Japan (2024)
+Developed by NHK Project, RRST, Ritsumeikan University, Japan (2024–2026)
 - Official Website: https://www.rrst.jp
 - X (Twitter): https://x.com/RRST_BKC
 
