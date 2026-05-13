@@ -133,9 +133,17 @@ void setup() {
 
     robomas_init();
 
+    // xTaskCreate(
+    //     M3508_Task,   // タスク関数
+    //     "M3508_Task", // タスク名
+    //     2048,         // スタックサイズ（words）
+    //     NULL,
+    //     9, // 優先度
+    //     NULL);
+
     xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
+        M2006_Task,   // タスク関数
+        "M2006_Task", // タスク名
         2048,         // スタックサイズ（words）
         NULL,
         9, // 優先度
@@ -153,9 +161,17 @@ void setup() {
 
     robomas_init();
 
+    // xTaskCreate(
+    //     M3508_Task,   // タスク関数
+    //     "M3508_Task", // タスク名
+    //     2048,         // スタックサイズ（words）
+    //     NULL,
+    //     9, // 優先度
+    //     NULL);
+
     xTaskCreate(
-        M3508_Task,   // タスク関数
-        "M3508_Task", // タスク名
+        M2006_Task,   // タスク関数
+        "M2006_Task", // タスク名
         2048,         // スタックサイズ（words）
         NULL,
         9, // 優先度

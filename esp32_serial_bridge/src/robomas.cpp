@@ -58,9 +58,14 @@ float ki_pos = 0.01f; // 角度積分ゲイン
 float kd_pos = 0.02f; // 角度微分ゲイン
 
 // -------- 速度PIDゲイン -------- //
-float kp_vel = 0.8;
-float ki_vel = 0.0;
-float kd_vel = 0.05; // 微分は控えめに
+float kp_vel_m3508 = 0.8;
+float ki_vel_m3508 = 0.0;
+float kd_vel_m3508 = 0.05; // 微分は控えめに
+
+float kp_vel_m2006 = 0.8;
+float ki_vel_m2006 = 0.0;
+float kd_vel_m2006 = 0.02; // 微分は控えめに
+
 
 // -------- 電流PIDゲイン -------- //
 float kp_cur = 0.01;
@@ -173,7 +178,7 @@ void M3508_Task(void *pvParameters) {
         // // 5秒後にターゲットRPM増加
         for (int i = 0; i < NUM_MOTOR; i++) {
 
-            vel_out[i] = pid_vel(target_rpm[i], vel_m3508[i], vel_error_prev[i], vel_prop_prev[i], vel_output[i], kp_vel, ki_vel, kd_vel, dt);
+            vel_out[i] = pid_vel(target_rpm[i], vel_m3508[i], vel_error_prev[i], vel_prop_prev[i], vel_output[i], kp_vel_m3508, ki_vel_m3508, kd_vel_m3508, dt);
 
             motor_output_current[i] = constrain_double(vel_out[i] * 10, -20, 20);
         }
@@ -203,24 +208,30 @@ void M3508_Task(void *pvParameters) {
 
 void M2006_Task(void *pvParameters)
 {
-
-    md_enc_init();
     // 初期化
     lastPidTime = millis();
 
     while (1)
     {
-        for (int i = 0; i < NUM_MOTOR; i++)
-        {
+
+        for (int i = 0; i < NUM_MOTOR; i++) {
             // 2026/02/14, 7,8,9,10から5,6,7,8に変更
-            c_m2006[i] = Rx_16Data[i + 5];
+            target_rpm[i] = Rx_16Data[i + 5];
         }
+        unsigned long now = millis();
+        float dt = (now - lastPidTime) / 1000.0f;
+        if (dt <= 0)
+            dt = 0.000001f;
+        if (dt > 0.02f)
+            dt = 0.02f;
+        lastPidTime = now;
         // TWAI受信処理
         twai_receive_feedback();
         for (int i = 0; i < NUM_MOTOR; i++)
         {
+           c_m2006[i] = pid_vel(target_rpm[i], vel_m2006[i], vel_error_prev[i], vel_prop_prev[i], vel_output[i], kp_vel_m2006, ki_vel_m2006, kd_vel_m2006, dt);
 
-            motor_output_current[i] = constrain_double(c_m2006[i], -10, 10);
+            motor_output_current[i] = constrain_double(c_m2006[i], -1, 1);
         }
 
         // 送信
@@ -238,6 +249,7 @@ void M2006_Task(void *pvParameters)
         Tx_16Data[13] = static_cast<int16_t>(vel_m2006[2]);
         Tx_16Data[14] = static_cast<int16_t>(vel_m2006[3]);
 
+        Tx_16Data[15] = static_cast<int16_t>(c_m2006[2]);
         // Serial.print(vel_m2006[0]);
         // Serial.print("\t");
         // Serial.println(current[0]);
