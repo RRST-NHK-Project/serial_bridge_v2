@@ -44,8 +44,11 @@ float vel_out[NUM_MOTOR] = {0};        // 最終速度出力
 
 // -------- 状態量 / CAN受信関連 -------- //
 float angle_m3508[NUM_MOTOR] = {0}; // 角度
+float angle_m2006[NUM_MOTOR] = {0}; // 角度
 float vel_m3508[NUM_MOTOR] = {0};   // 速度
-float c[NUM_MOTOR] = {0};           //
+float vel_m2006[NUM_MOTOR] = {0};   // 速度
+float c_m3508[NUM_MOTOR] = {0};           //
+float c_m2006[NUM_MOTOR] = {0};           //
 
 unsigned long lastPidTime = 0; // PID制御用タイマー
 
@@ -92,6 +95,35 @@ void send_cur_all(float cur_array[NUM_MOTOR]) {
         Serial.println("[ERR] twai_transmit failed");
     }
 }
+
+void send_cur_c610(float cur_array[NUM_MOTOR])
+{
+    twai_message_t tx;       // 送信用メッセージ
+    tx.identifier = 0x200;   // CAN ID
+    tx.extd = 0;             // 標準フレーム
+    tx.rtr = 0;              // データフレーム
+    tx.data_length_code = 8; // 8バイト
+
+    // C610 の仕様: 電流指令はおおむね -10000 ～ +10000（±10A相当）
+    constexpr float MAX_CUR = 10.0f;
+    constexpr int16_t MAX_CUR_VAL = 10000;
+
+    for (int i = 0; i < NUM_MOTOR; i++)
+    {
+        float amp = constrain_double(cur_array[i], -MAX_CUR, MAX_CUR);
+        int16_t val = static_cast<int16_t>(amp * (MAX_CUR_VAL / MAX_CUR));
+
+        tx.data[i * 2] = (val >> 8) & 0xFF;
+        tx.data[i * 2 + 1] = val & 0xFF;
+    }
+
+    if (twai_transmit(&tx, pdMS_TO_TICKS(20)) != ESP_OK)
+    {
+        Serial.println("[ERR] twai_transmit failed");
+    }
+    
+}
+
 
 float pid(float setpoint, float input, float &error_prev, float &integral,
           float kp, float ki, float kd, float dt) {
@@ -169,6 +201,52 @@ void M3508_Task(void *pvParameters) {
     }
 }
 
+void M2006_Task(void *pvParameters)
+{
+
+    md_enc_init();
+    // 初期化
+    lastPidTime = millis();
+
+    while (1)
+    {
+        for (int i = 0; i < NUM_MOTOR; i++)
+        {
+            // 2026/02/14, 7,8,9,10から5,6,7,8に変更
+            c_m2006[i] = Rx_16Data[i + 5];
+        }
+        // TWAI受信処理
+        twai_receive_feedback();
+        for (int i = 0; i < NUM_MOTOR; i++)
+        {
+
+            motor_output_current[i] = constrain_double(c_m2006[i], -10, 10);
+        }
+
+        // 送信
+        send_cur_c610(motor_output_current);
+
+        // debug
+
+        Tx_16Data[7] = static_cast<int16_t>(angle_m2006[0]);
+        Tx_16Data[8] = static_cast<int16_t>(angle_m2006[1]);
+        Tx_16Data[9] = static_cast<int16_t>(angle_m2006[2]);
+        Tx_16Data[10] = static_cast<int16_t>(angle_m2006[3]);
+
+        Tx_16Data[11] = static_cast<int16_t>(vel_m2006[0]);
+        Tx_16Data[12] = static_cast<int16_t>(vel_m2006[1]);
+        Tx_16Data[13] = static_cast<int16_t>(vel_m2006[2]);
+        Tx_16Data[14] = static_cast<int16_t>(vel_m2006[3]);
+
+        // Serial.print(vel_m2006[0]);
+        // Serial.print("\t");
+        // Serial.println(current[0]);
+
+        vTaskDelay(1);
+    }
+}
+
+
 void twai_receive_feedback() {
     twai_message_t rx_msg;
 
@@ -198,7 +276,12 @@ void twai_receive_feedback() {
 
         angle_m3508[m] = total_encoder[m] * (360.0f / (ENCODER_MAX * gear_m3508));
         vel_m3508[m] = rpm[m] / gear_m3508;
-        c[m] = current[m] * 20.0f / 16384.0f;
+        c_m3508[m] = current[m] * 20.0f / 16384.0f;
+
+        angle_m2006[m] = total_encoder[m] * (360.0f / (ENCODER_MAX * gear_m2006));
+        vel_m2006[m] = rpm[m] / gear_m2006;
+        c_m2006[m] = current[m] * 10.0f / 10000.0f;
+
     }
 }
 
