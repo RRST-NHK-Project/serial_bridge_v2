@@ -35,7 +35,7 @@
 - XOR チェックサムによるフレーム検証を行い、通信の信頼性を担保しています。
 - 通信切断・タイムアウト時には自動で再接続を試みます。
 - 3 種類のログ出力モード: テキスト表示 / グラフィカル / サイレントを搭載しています。デフォルトはグラフィカルモードです。
-- ESP32 系マイコン向けファームウェアを同梱（PlatformIO）しているためIDとモードを設定して書き込むだけで使用可能です。
+- ESP32 / Arduino Uno（WIP） / STM32 Nucleo（WIP） 向けのマイコンファームウェアを同梱（PlatformIO）しているため、IDとモードを設定して書き込むだけで使用可能です。
 
 ---
 
@@ -226,6 +226,8 @@ ros2 launch serial_bridge serial_bridge.launch.py
 | `config/` | ROS 2 パラメータファイル（`serial_bridge.yaml`） |
 | `launch/` | ランチファイル（`serial_bridge.launch.py`） |
 | `esp32_serial_bridge/` | マイコン向けファームウェア（PlatformIO） |
+| `arduino_uno_serial_bridge/` | マイコン向けファームウェア（PlatformIO, Arduino Uno）— **WIP** |
+| `stm32_serial_bridge/` | マイコン向けファームウェア（PlatformIO, STM32 Nucleo）— **WIP** |
 
 ---
 

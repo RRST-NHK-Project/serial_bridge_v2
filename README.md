@@ -35,7 +35,7 @@ This package enables real-time control of motors, servos, and solenoid valves on
 - XOR checksum-based frame validation ensures communication reliability.
 - Automatic reconnection on disconnect or RX timeout.
 - Three log output modes: terminal text, graphical bar, or silent. Default is graphical mode.
-- ESP32-based MCU firmware included (PlatformIO) — just set the ID and mode, flash, and it works.
+- MCU firmware included (PlatformIO): ESP32 + Arduino Uno (WIP) + STM32 Nucleo (WIP).
 
 ---
 
@@ -226,6 +226,8 @@ Configured at compile time in `include/serial_bridge/config.hpp`:
 | `config/` | ROS 2 parameter file (`serial_bridge.yaml`) |
 | `launch/` | Launch file (`serial_bridge.launch.py`) |
 | `esp32_serial_bridge/` | MCU firmware (PlatformIO) |
+| `arduino_uno_serial_bridge/` | MCU firmware (PlatformIO, Arduino Uno) — **WIP** |
+| `stm32_serial_bridge/` | MCU firmware (PlatformIO, STM32 Nucleo) — **WIP** |
 
 ---
 
