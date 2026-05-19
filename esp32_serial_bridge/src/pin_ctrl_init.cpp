@@ -129,6 +129,11 @@ void ROBOMAS_IO_init() {
         pinMode(TR6, OUTPUT);
         pinMode(TR7, OUTPUT);
     }
+
+    // SW ピン初期化
+    pinMode(SW1, INPUT_PULLUP);
+    pinMode(SW2, INPUT_PULLUP);
+    pinMode(SW3, INPUT_PULLUP);
 }
 
 // エンコーダ4つ分の初期化

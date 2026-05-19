@@ -74,6 +74,7 @@ void ROBOMAS_IO_Task(void *) {
         Servo_Output();
         IO_TR_Output();
         ROBOMAS_IO_ENC_Input();
+        SW_Input();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CTRL_PERIOD_MS));
     }
 }

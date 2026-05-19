@@ -184,6 +184,7 @@ void setup() {
         NULL,
         11, // 優先度
         NULL);
+        
 
 #elif defined(MODE_DEBUG)
     // デバッグモード初期化
