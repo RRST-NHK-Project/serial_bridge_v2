@@ -109,6 +109,16 @@ void ROBOMAS_IO_init() {
 
     ENCx4_init();
 
+    ledcSetup(4, SERVO_PWM_FREQ, SERVO_PWM_RESOLUTION);
+    ledcSetup(5, SERVO_PWM_FREQ, SERVO_PWM_RESOLUTION);
+    if (!ENABLE_EXTRA_TR_PIN) {
+        ledcSetup(6, SERVO_PWM_FREQ, SERVO_PWM_RESOLUTION);
+        ledcSetup(7, SERVO_PWM_FREQ, SERVO_PWM_RESOLUTION);
+    }
+
+    ledcAttachPin(SERVO1, 4);
+    ledcAttachPin(SERVO2, 5);
+
     // トランジスタのピンを出力に設定
     pinMode(TR1, OUTPUT);
     pinMode(TR2, OUTPUT);
