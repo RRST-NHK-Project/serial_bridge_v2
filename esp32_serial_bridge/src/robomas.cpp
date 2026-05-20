@@ -239,17 +239,18 @@ void M2006_Task(void *pvParameters)
 
         // debug
 
-        Tx_16Data[7] = static_cast<int16_t>(angle_m2006[0]);
-        Tx_16Data[8] = static_cast<int16_t>(angle_m2006[1]);
-        Tx_16Data[9] = static_cast<int16_t>(angle_m2006[2]);
-        Tx_16Data[10] = static_cast<int16_t>(angle_m2006[3]);
+        //場所がないのでMDかぶらせてる
+        Tx_16Data[13] = static_cast<int16_t>(angle_m2006[0]);
+        Tx_16Data[14] = static_cast<int16_t>(angle_m2006[1]);
+        Tx_16Data[15] = static_cast<int16_t>(angle_m2006[2]);
+        Tx_16Data[16] = static_cast<int16_t>(angle_m2006[3]);
 
-        Tx_16Data[11] = static_cast<int16_t>(vel_m2006[0]);
-        Tx_16Data[12] = static_cast<int16_t>(vel_m2006[1]);
-        Tx_16Data[13] = static_cast<int16_t>(vel_m2006[2]);
-        Tx_16Data[14] = static_cast<int16_t>(vel_m2006[3]);
+        Tx_16Data[5] = static_cast<int16_t>(vel_m2006[0]);
+        Tx_16Data[6] = static_cast<int16_t>(vel_m2006[1]);
+        Tx_16Data[7] = static_cast<int16_t>(vel_m2006[2]);
+        Tx_16Data[8] = static_cast<int16_t>(vel_m2006[3]);
 
-        Tx_16Data[15] = static_cast<int16_t>(c_m2006[2]);
+        // Tx_16Data[15] = static_cast<int16_t>(c_m2006[2]);
         // Serial.print(vel_m2006[0]);
         // Serial.print("\t");
         // Serial.println(current[0]);
