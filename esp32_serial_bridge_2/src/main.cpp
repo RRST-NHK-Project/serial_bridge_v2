@@ -79,6 +79,16 @@ void setup() {
         11, // 優先度
         NULL);
 
+#elif defined(MODE_OMNI)
+    // オムニモード初期化
+    xTaskCreate(
+        OMNI_Task,   // タスク関数
+        "OMNI_Task", // タスク名
+        2048,         // スタックサイズ（words）
+        NULL,
+        11, // 優先度
+        NULL);
+
 #elif defined(MODE_ROBOMAS)
     // ロボマスモード初期化
 
@@ -89,17 +99,7 @@ void setup() {
     //     "M3508_Task", // タスク名
     //     2048,         // スタックサイズ（words）
     //     NULL,
-    //     9, // 優先度
-    //     NULL);
-
-    // xTaskCreate(
-    //     PID_Task,   // タスク関数
-    //     "PID_Task", // タスク名
-    //     2048,       // スタックサイズ（words）
-    //     NULL,
-    //     11, // 優先度
-    //     NULL);
-
+    //     9, // 優先度+
     xTaskCreate(
         M2006_Task,   // タスク関数
         "M2006_Task", // タスク名
@@ -217,7 +217,7 @@ void setup() {
 #error "No mode defined. Please define one mode in config.hpp."
 #endif
 
-#if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + \
+#if (defined(MODE_OUTPUT) + defined(MODE_INPUT) + defined(MODE_IO) + defined(MODE_OMNI) + \
      defined(MODE_ROBOMAS) + defined(MODE_ROBOMAS_PLUS_OUTPUT) + defined(MODE_ROBOMAS_PLUS_INPUT) + defined(MODE_ROBOMAS_PLUS_IO) + defined(MODE_DEBUG)) != 1
 #error "Invalid mode configuration. Please define exactly *one mode* in config.hpp."
 #endif

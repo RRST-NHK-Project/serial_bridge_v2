@@ -14,13 +14,14 @@ Copyright (c) 2025 RRST-NHK-Project. All rights reserved.
 #define DEVICE_ID 0x03
 
 // モードの設定，どれか一つをコメントアウト解除する
-//#define MODE_OUTPUT
+// #define MODE_OUTPUT
 // #define MODE_INPUT
-//#define MODE_IO
-//#define MODE_ROBOMAS
-// #define MODE_ROBOMAS_PLUS_OUTPUT
-// #define MODE_ROBOMAS_PLUS_INPUT
-#define MODE_ROBOMAS_PLUS_IO
+// #define MODE_IO
+#define MODE_OMNI
+// この基板ではロボマスは使えません#define MODE_ROBOMAS
+// この基板ではロボマスは使えません#define MODE_ROBOMAS_PLUS_OUTPUT
+// この基板ではロボマスは使えません#define MODE_ROBOMAS_PLUS_INPUT
+// この基板ではロボマスは使えません#define MODE_ROBOMAS_PLUS_IO
 // #define MODE_DEBUG
 
 // ================= MD関連 =================
